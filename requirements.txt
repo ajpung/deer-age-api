@@ -1,13 +1,8 @@
 Flask==2.3.3
 Flask-CORS==4.0.0
 gunicorn==21.2.0
-
-# PyTorch CPU-only (smaller, more compatible)
---index-url https://download.pytorch.org/whl/cpu
 torch
-torchvision
-
-# ML libraries
+torchvision  
 timm
 numpy
 opencv-python-headless
