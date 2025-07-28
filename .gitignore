@@ -3,6 +3,9 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+# ML model files
+*.pth
+
 # C extensions
 *.so
 

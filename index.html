@@ -1,0 +1,1388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DeerAgeAI - Image Cropping Tool</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f5dc;
+            color: #000000;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            color: #000000;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            color: #333333;
+        }
+
+        /* Model Selection */
+        .model-selection {
+            margin-bottom: 2rem;
+        }
+
+        .model-selection h2 {
+            text-align: center;
+            margin-bottom: 1rem;
+            color: #000000;
+        }
+
+        .model-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .model-btn {
+            padding: 12px 24px;
+            border: 2px solid #2d4a2d;
+            background: transparent;
+            color: #2d4a2d;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+
+        .model-btn:hover {
+            background: rgba(45, 74, 45, 0.1);
+        }
+
+        .model-btn.active {
+            background: #2d4a2d;
+            border-color: #2d4a2d;
+            color: #ffffff;
+        }
+
+        /* Drop Zone */
+        .drop-zone {
+            border: 3px dashed #2d4a2d;
+            border-radius: 12px;
+            padding: 3rem;
+            text-align: center;
+            background: rgba(45, 74, 45, 0.1);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 2rem;
+        }
+
+        .drop-zone:hover {
+            background: rgba(45, 74, 45, 0.2);
+            border-color: #1a4d1a;
+        }
+
+        .drop-zone.dragover {
+            background: rgba(45, 74, 45, 0.3);
+            border-color: #1a4d1a;
+            transform: scale(1.02);
+        }
+
+        .drop-zone-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            color: #2d4a2d;
+        }
+
+        .drop-zone h3 {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+            color: #000000;
+        }
+
+        .drop-zone p {
+            color: #333333;
+            margin-bottom: 1rem;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .upload-btn {
+            background: #2d4a2d;
+            color: #ffffff;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .upload-btn:hover {
+            background: #1a4d1a;
+            transform: translateY(-2px);
+        }
+
+        /* Crop Interface */
+        .crop-interface {
+            display: none;
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .crop-interface.active {
+            display: block;
+        }
+
+        .crop-interface h2 {
+            text-align: center;
+            margin-bottom: 1rem;
+            color: #000000;
+        }
+
+        .crop-info {
+            text-align: center;
+            margin-bottom: 1.5rem;
+            color: #333333;
+        }
+
+        .crop-container {
+            position: relative;
+            display: inline-block;
+            margin: 0 auto;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .crop-image {
+            display: block;
+            max-width: 100%;
+            max-height: 500px;
+            user-select: none;
+            -webkit-user-drag: none;
+        }
+
+        /* Crop Overlay */
+        .crop-overlay {
+            position: absolute;
+            border: 2px solid #daa520;
+            background: rgba(218, 165, 32, 0.1);
+            cursor: move;
+            box-shadow: 
+                0 0 0 9999px rgba(0, 0, 0, 0.5),
+                inset 0 0 0 1px rgba(255, 255, 255, 0.3);
+            user-select: none;
+        }
+
+        /* Resize Handles */
+        .resize-handle {
+            position: absolute;
+            background: #daa520;
+            border: 2px solid #ffffff;
+            border-radius: 50%;
+            width: 12px;
+            height: 12px;
+            z-index: 10;
+        }
+
+        .resize-handle.nw {
+            top: -6px;
+            left: -6px;
+            cursor: nw-resize;
+        }
+
+        .resize-handle.ne {
+            top: -6px;
+            right: -6px;
+            cursor: ne-resize;
+        }
+
+        .resize-handle.sw {
+            bottom: -6px;
+            left: -6px;
+            cursor: sw-resize;
+        }
+
+        .resize-handle.se {
+            bottom: -6px;
+            right: -6px;
+            cursor: se-resize;
+        }
+
+        .resize-handle.n {
+            top: -6px;
+            left: 50%;
+            transform: translateX(-50%);
+            cursor: n-resize;
+        }
+
+        .resize-handle.s {
+            bottom: -6px;
+            left: 50%;
+            transform: translateX(-50%);
+            cursor: s-resize;
+        }
+
+        .resize-handle.w {
+            top: 50%;
+            left: -6px;
+            transform: translateY(-50%);
+            cursor: w-resize;
+        }
+
+        .resize-handle.e {
+            top: 50%;
+            right: -6px;
+            transform: translateY(-50%);
+            cursor: e-resize;
+        }
+
+        /* Crop Center Icon */
+        .crop-center {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 2rem;
+            color: #daa520;
+            pointer-events: none;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Control Buttons */
+        .crop-controls {
+            text-align: center;
+            margin-top: 2rem;
+        }
+
+        .control-btn {
+            background: #2d4a2d;
+            color: #ffffff;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 1rem;
+            margin: 0 0.5rem;
+            transition: all 0.3s ease;
+        }
+
+        .control-btn:hover {
+            background: #1a4d1a;
+            transform: translateY(-2px);
+        }
+
+        .control-btn.secondary {
+            background: transparent;
+            color: #2d4a2d;
+            border: 2px solid #2d4a2d;
+        }
+
+        .control-btn.secondary:hover {
+            background: #2d4a2d;
+            color: #ffffff;
+        }
+
+        /* Crop Dimensions Display */
+        .crop-dimensions {
+            text-align: center;
+            margin-top: 1rem;
+            font-size: 0.9rem;
+            color: #daa520;
+        }
+
+        /* Results Section */
+        .results-section {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            margin: 20px 0;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .results-header {
+            text-align: center;
+            margin-bottom: 25px;
+        }
+
+        .results-header h2 {
+            color: #2d4a2d;
+            font-size: 1.8em;
+            margin-bottom: 10px;
+        }
+
+        .results-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .result-card {
+            text-align: center;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .age-card {
+            background: #f0f8f0;
+        }
+
+        .confidence-card {
+            background: #f0f0f8;
+        }
+
+        .result-label {
+            color: #333;
+            font-size: 1.1em;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        .age-value {
+            font-size: 2.2em;
+            font-weight: bold;
+            color: #2d4a2d;
+        }
+
+        .confidence-value {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #2196F3;
+        }
+
+        .images-comparison {
+            margin-top: 30px;
+        }
+
+        .images-comparison h3 {
+            text-align: center;
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .image-pair {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            align-items: start;
+        }
+
+        .image-container {
+            text-align: center;
+        }
+
+        .image-container h4 {
+            margin-bottom: 10px;
+            color: #555;
+            font-size: 1.1em;
+        }
+
+        .comparison-image {
+            width: 100%;
+            max-width: 300px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+
+        .close-btn {
+            background: #2d4a2d;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            margin-top: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .close-btn:hover {
+            background: #1a4d1a;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .drop-zone {
+                padding: 2rem 1rem;
+            }
+
+            .crop-interface {
+                padding: 1rem;
+            }
+
+            .model-buttons {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .control-btn {
+                margin: 0.25rem;
+                padding: 10px 20px;
+            }
+
+            .results-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .image-pair {
+                grid-template-columns: 1fr;
+                gap: 15px;
+            }
+        }
+
+        /* Loading Animation */
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .spinner {
+            border: 3px solid rgba(45, 74, 45, 0.3);
+            border-top: 3px solid #2d4a2d;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>DeerAge<span style="color: #daa520;">AI</span> Crop Tool</h1>
+            <p>Upload and crop your deer images for AI analysis</p>
+        </div>
+
+        <!-- Model Selection -->
+        <div class="model-selection">
+            <h2>Select Analysis Type</h2>
+            <div class="model-buttons">
+                <button class="model-btn" data-model="trailcam">
+                    📷 Trail Camera (1:1 Square)
+                </button>
+                <button class="model-btn" data-model="jawbone">
+                    🦴 Jawbone (2:1 Wide Rectangle)
+                </button>
+            </div>
+        </div>
+
+        <!-- Drop Zone -->
+        <div class="drop-zone" id="dropZone">
+            <div class="drop-zone-icon">📁</div>
+            <h3>Drag & Drop Your Image Here</h3>
+            <p>or click to browse files</p>
+            <button class="upload-btn" onclick="document.getElementById('fileInput').click()">
+                Choose Image File
+            </button>
+            <input type="file" id="fileInput" class="file-input" accept="image/*">
+        </div>
+
+        <!-- Crop Interface -->
+        <div class="crop-interface" id="cropInterface">
+            <h2>Crop Your Image</h2>
+            <div class="crop-info">
+                <p>Drag the crop area to reposition • Drag corners/edges to resize</p>
+                <p>Target ratio: <span id="targetRatio">1:1</span> • Target size: <span id="targetSize">224×224</span></p>
+            </div>
+            
+            <div style="text-align: center;">
+                <div class="crop-container" id="cropContainer">
+                    <img id="cropImage" class="crop-image" src="" alt="Crop preview">
+                    <div class="crop-overlay" id="cropOverlay">
+                        <!-- Resize handles -->
+                        <div class="resize-handle nw" data-handle="nw"></div>
+                        <div class="resize-handle ne" data-handle="ne"></div>
+                        <div class="resize-handle sw" data-handle="sw"></div>
+                        <div class="resize-handle se" data-handle="se"></div>
+                        <div class="resize-handle n" data-handle="n"></div>
+                        <div class="resize-handle s" data-handle="s"></div>
+                        <div class="resize-handle w" data-handle="w"></div>
+                        <div class="resize-handle e" data-handle="e"></div>
+                        
+                        <!-- Center icon -->
+                        <div class="crop-center">✂️</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="crop-dimensions" id="cropDimensions">
+                Crop area: 200×200 pixels
+            </div>
+
+            <div class="crop-controls">
+                <button class="control-btn secondary" onclick="resetCrop()">Reset Crop</button>
+                <button class="control-btn secondary" onclick="startOver()">New Image</button>
+                <button class="control-btn" onclick="downloadCroppedImage()">Download Cropped Image</button>
+                <button class="control-btn" onclick="sendToAnalysis()">Send to AI Analysis</button>
+            </div>
+        </div>
+
+        <!-- Loading -->
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Processing your image...</p>
+        </div>
+    </div>
+
+    <script>
+        let selectedModel = null;
+        let uploadedImage = null;
+        let cropData = {
+            x: 0,
+            y: 0,
+            width: 200,
+            height: 200
+        };
+        let isDragging = false;
+        let isResizing = false;
+        let dragStart = { x: 0, y: 0 };
+        let resizeHandle = null;
+        let aspectRatio = 1; // 1:1 for trail cam, 0.5 for jawbone (1:2)
+
+        // Model selection
+        document.querySelectorAll('.model-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                // Remove active class from all buttons
+                document.querySelectorAll('.model-btn').forEach(b => b.classList.remove('active'));
+                
+                // Add active class to clicked button
+                this.classList.add('active');
+                
+                // Set selected model
+                selectedModel = this.dataset.model;
+                
+                // Update aspect ratio
+                if (selectedModel === 'trailcam') {
+                    aspectRatio = 1; // 1:1 square
+                    document.getElementById('targetRatio').textContent = '1:1';
+                    document.getElementById('targetSize').textContent = '224×224';
+                } else {
+                    aspectRatio = 2; // 2:1 wide rectangle (width:height = 2:1)
+                    document.getElementById('targetRatio').textContent = '2:1 (wide)';
+                    document.getElementById('targetSize').textContent = '448×224';
+                }
+                
+                // Reset crop if image is loaded
+                if (uploadedImage) {
+                    resetCrop();
+                }
+            });
+        });
+
+        // File input handling
+        const fileInput = document.getElementById('fileInput');
+        const dropZone = document.getElementById('dropZone');
+
+        fileInput.addEventListener('change', handleFileSelect);
+        dropZone.addEventListener('click', () => fileInput.click());
+
+        // Drag and drop handlers
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+
+        function handleFileSelect(e) {
+            const files = e.target.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        }
+
+        function handleFile(file) {
+            if (!selectedModel) {
+                alert('Please select an analysis type first!');
+                return;
+            }
+
+            if (!file.type.startsWith('image/')) {
+                alert('Please select an image file!');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                uploadedImage = e.target.result;
+                showCropInterface();
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function showCropInterface() {
+            document.getElementById('cropInterface').classList.add('active');
+            const cropImage = document.getElementById('cropImage');
+            cropImage.src = uploadedImage;
+            
+            cropImage.onload = () => {
+                setupCropArea();
+                setupCropHandlers();
+            };
+        }
+
+        function setupCropArea() {
+            const cropImage = document.getElementById('cropImage');
+            const cropOverlay = document.getElementById('cropOverlay');
+            
+            const imageRect = cropImage.getBoundingClientRect();
+            const containerRect = cropImage.parentElement.getBoundingClientRect();
+            
+            const imgWidth = cropImage.offsetWidth;
+            const imgHeight = cropImage.offsetHeight;
+            
+            let cropWidth, cropHeight;
+            
+            if (selectedModel === 'trailcam') {
+                // 1:1 ratio - make it square
+                const size = Math.min(imgWidth, imgHeight) * 0.6;
+                cropWidth = size;
+                cropHeight = size;
+            } else {
+                // 2:1 ratio - wide rectangle (width:height = 2:1)
+                // Width should be 2x the height
+                const maxHeight = Math.min(imgHeight * 0.4, imgWidth * 0.2);
+                cropHeight = maxHeight;
+                cropWidth = maxHeight * 2; // Width = 2 * height for 2:1 ratio
+                
+                // Ensure it fits in the image
+                if (cropWidth > imgWidth * 0.8) {
+                    cropWidth = imgWidth * 0.8;
+                    cropHeight = cropWidth * 0.5; // Height = 0.5 * width for 2:1 ratio
+                }
+            }
+            
+            // Center the crop area
+            cropData = {
+                x: (imgWidth - cropWidth) / 2,
+                y: (imgHeight - cropHeight) / 2,
+                width: cropWidth,
+                height: cropHeight
+            };
+            
+            updateCropOverlay();
+        }
+
+        function updateCropOverlay() {
+            const cropOverlay = document.getElementById('cropOverlay');
+            
+            cropOverlay.style.left = cropData.x + 'px';
+            cropOverlay.style.top = cropData.y + 'px';
+            cropOverlay.style.width = cropData.width + 'px';
+            cropOverlay.style.height = cropData.height + 'px';
+            
+            updateCropDimensions();
+        }
+
+        function updateCropDimensions() {
+            const targetWidth = selectedModel === 'trailcam' ? 224 : 448;
+            const targetHeight = selectedModel === 'trailcam' ? 224 : 224;
+            const ratio = selectedModel === 'trailcam' ? '1:1' : '2:1 (wide)';
+            
+            document.getElementById('cropDimensions').textContent = 
+                `Crop area: ${Math.round(cropData.width)}×${Math.round(cropData.height)} pixels (${ratio}) → Output: ${targetWidth}×${targetHeight}`;
+        }
+
+        function setupCropHandlers() {
+            const cropOverlay = document.getElementById('cropOverlay');
+            const resizeHandles = document.querySelectorAll('.resize-handle');
+            
+            // Drag to move
+            cropOverlay.addEventListener('mousedown', startDrag);
+            
+            // Resize handles
+            resizeHandles.forEach(handle => {
+                handle.addEventListener('mousedown', (e) => startResize(e, handle.dataset.handle));
+            });
+            
+            // Mouse move and up handlers
+            document.addEventListener('mousemove', handleMouseMove);
+            document.addEventListener('mouseup', handleMouseUp);
+        }
+
+        function startDrag(e) {
+            if (e.target.classList.contains('resize-handle')) return;
+            
+            isDragging = true;
+            dragStart = {
+                x: e.clientX - cropData.x,
+                y: e.clientY - cropData.y
+            };
+            e.preventDefault();
+        }
+
+        function startResize(e, handle) {
+            isResizing = true;
+            resizeHandle = handle;
+            dragStart = {
+                x: e.clientX,
+                y: e.clientY,
+                cropX: cropData.x,
+                cropY: cropData.y,
+                cropWidth: cropData.width,
+                cropHeight: cropData.height
+            };
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        function handleMouseMove(e) {
+            if (isDragging) {
+                const cropImage = document.getElementById('cropImage');
+                const newX = e.clientX - dragStart.x;
+                const newY = e.clientY - dragStart.y;
+                
+                // Constrain to image bounds
+                cropData.x = Math.max(0, Math.min(cropImage.offsetWidth - cropData.width, newX));
+                cropData.y = Math.max(0, Math.min(cropImage.offsetHeight - cropData.height, newY));
+                
+                updateCropOverlay();
+            } else if (isResizing) {
+                handleResize(e);
+            }
+        }
+
+        function handleResize(e) {
+            const cropImage = document.getElementById('cropImage');
+            const deltaX = e.clientX - dragStart.x;
+            const deltaY = e.clientY - dragStart.y;
+            
+            let newX = dragStart.cropX;
+            let newY = dragStart.cropY;
+            let newWidth = dragStart.cropWidth;
+            let newHeight = dragStart.cropHeight;
+            
+            // Handle different resize directions
+            switch (resizeHandle) {
+                case 'se': // Bottom-right
+                    newWidth = dragStart.cropWidth + deltaX;
+                    newHeight = dragStart.cropHeight + deltaY;
+                    break;
+                case 'sw': // Bottom-left
+                    newX = dragStart.cropX + deltaX;
+                    newWidth = dragStart.cropWidth - deltaX;
+                    newHeight = dragStart.cropHeight + deltaY;
+                    break;
+                case 'ne': // Top-right
+                    newY = dragStart.cropY + deltaY;
+                    newWidth = dragStart.cropWidth + deltaX;
+                    newHeight = dragStart.cropHeight - deltaY;
+                    break;
+                case 'nw': // Top-left
+                    newX = dragStart.cropX + deltaX;
+                    newY = dragStart.cropY + deltaY;
+                    newWidth = dragStart.cropWidth - deltaX;
+                    newHeight = dragStart.cropHeight - deltaY;
+                    break;
+                case 'n': // Top
+                    newY = dragStart.cropY + deltaY;
+                    newHeight = dragStart.cropHeight - deltaY;
+                    break;
+                case 's': // Bottom
+                    newHeight = dragStart.cropHeight + deltaY;
+                    break;
+                case 'w': // Left
+                    newX = dragStart.cropX + deltaX;
+                    newWidth = dragStart.cropWidth - deltaX;
+                    break;
+                case 'e': // Right
+                    newWidth = dragStart.cropWidth + deltaX;
+                    break;
+            }
+            
+            // Get image dimensions for constraints
+            const maxImageWidth = cropImage.offsetWidth;
+            const maxImageHeight = cropImage.offsetHeight;
+            
+            // Maintain aspect ratio and apply size constraints
+            if (selectedModel === 'trailcam') {
+                // Keep perfect 1:1 square ratio for ALL trail camera resizing
+                // Max size is limited by the smallest image dimension
+                const maxSquareSize = Math.min(maxImageWidth, maxImageHeight);
+                
+                if (['e', 'w'].includes(resizeHandle)) {
+                    // Horizontal edge: use width to determine height, then constrain
+                    newHeight = newWidth;
+                } else if (['n', 's'].includes(resizeHandle)) {
+                    // Vertical edge: use height to determine width, then constrain
+                    newWidth = newHeight;
+                } else {
+                    // Corner handles: average and constrain
+                    const avgSize = (newWidth + newHeight) / 2;
+                    newWidth = avgSize;
+                    newHeight = avgSize;
+                }
+                
+                // Apply maximum square size constraint
+                if (newWidth > maxSquareSize) {
+                    newWidth = maxSquareSize;
+                    newHeight = maxSquareSize;
+                }
+                if (newHeight > maxSquareSize) {
+                    newWidth = maxSquareSize;
+                    newHeight = maxSquareSize;
+                }
+                
+            } else if (selectedModel === 'jawbone') {
+                // Keep perfect 2:1 ratio for ALL jawbone resizing (width:height = 2:1)
+                // Max height is limited so that width (height * 2) doesn't exceed image width
+                const maxJawboneHeight = Math.min(maxImageHeight, maxImageWidth * 0.5);
+                
+                if (['n', 's', 'se', 'sw', 'ne', 'nw'].includes(resizeHandle)) {
+                    // When dragging vertically or corners, prioritize height and calculate width
+                    newWidth = newHeight * 2; // width = 2 * height for 2:1 ratio
+                } else if (['e', 'w'].includes(resizeHandle)) {
+                    // When dragging horizontally, prioritize width and calculate height
+                    newHeight = newWidth * 0.5; // height = 0.5 * width for 2:1 ratio
+                }
+                
+                // Apply maximum jawbone size constraints
+                if (newHeight > maxJawboneHeight) {
+                    newHeight = maxJawboneHeight;
+                    newWidth = maxJawboneHeight * 2;
+                }
+                if (newWidth > maxImageWidth) {
+                    newWidth = maxImageWidth;
+                    newHeight = maxImageWidth * 0.5;
+                }
+            }
+            
+            // Ensure minimum size (but respect aspect ratios)
+            const minSize = 50;
+            if (selectedModel === 'trailcam') {
+                // For square, both dimensions must be at least minSize
+                if (newWidth < minSize || newHeight < minSize) {
+                    newWidth = minSize;
+                    newHeight = minSize;
+                }
+            } else {
+                // For 2:1 rectangle, ensure minimum height, width will be 2x
+                if (newHeight < minSize) {
+                    newHeight = minSize;
+                    newWidth = minSize * 2;
+                }
+                if (newWidth < minSize * 2) {
+                    newWidth = minSize * 2;
+                    newHeight = minSize;
+                }
+            }
+            
+            // Final constraint: ensure crop area fits within image bounds
+            const maxPossibleWidth = maxImageWidth - newX;
+            const maxPossibleHeight = maxImageHeight - newY;
+            
+            if (newWidth > maxPossibleWidth) {
+                newWidth = maxPossibleWidth;
+                if (selectedModel === 'trailcam') {
+                    newHeight = newWidth; // Keep square
+                } else {
+                    newHeight = newWidth * 0.5; // Keep 2:1 ratio
+                }
+            }
+            
+            if (newHeight > maxPossibleHeight) {
+                newHeight = maxPossibleHeight;
+                if (selectedModel === 'trailcam') {
+                    newWidth = newHeight; // Keep square
+                } else {
+                    newWidth = newHeight * 2; // Keep 2:1 ratio
+                }
+            }
+            
+            // Adjust position if crop area was resized and is now out of bounds
+            newX = Math.max(0, Math.min(maxImageWidth - newWidth, newX));
+            newY = Math.max(0, Math.min(maxImageHeight - newHeight, newY));
+            
+            cropData = { x: newX, y: newY, width: newWidth, height: newHeight };
+            updateCropOverlay();
+        }
+
+        function handleMouseUp() {
+            isDragging = false;
+            isResizing = false;
+            resizeHandle = null;
+        }
+
+        function resetCrop() {
+            setupCropArea();
+        }
+
+        function startOver() {
+            document.getElementById('cropInterface').classList.remove('active');
+            uploadedImage = null;
+            fileInput.value = '';
+        }
+
+        function downloadCroppedImage() {
+            if (!uploadedImage || !selectedModel) {
+                alert('Please select a model and upload an image first!');
+                return;
+            }
+
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const cropImage = document.getElementById('cropImage');
+            
+            // Set canvas size based on model
+            const targetWidth = selectedModel === 'trailcam' ? 224 : 448;
+            const targetHeight = selectedModel === 'trailcam' ? 224 : 224;
+            
+            canvas.width = targetWidth;
+            canvas.height = targetHeight;
+            
+            // Calculate scale factors between displayed image and actual image
+            const scaleX = cropImage.naturalWidth / cropImage.offsetWidth;
+            const scaleY = cropImage.naturalHeight / cropImage.offsetHeight;
+            
+            // Calculate actual crop coordinates on the original image
+            const actualCropX = cropData.x * scaleX;
+            const actualCropY = cropData.y * scaleY;
+            const actualCropWidth = cropData.width * scaleX;
+            const actualCropHeight = cropData.height * scaleY;
+            
+            // Create new image element for drawing
+            const img = new Image();
+            img.onload = () => {
+                try {
+                    // Clear canvas
+                    ctx.clearRect(0, 0, targetWidth, targetHeight);
+                    
+                    // Draw the cropped portion of the image to the canvas
+                    ctx.drawImage(
+                        img, 
+                        actualCropX, actualCropY, actualCropWidth, actualCropHeight,  // Source rectangle
+                        0, 0, targetWidth, targetHeight                               // Destination rectangle
+                    );
+                    
+                    // Convert canvas to blob and download
+                    canvas.toBlob((blob) => {
+                        if (!blob) {
+                            alert('Failed to create image blob');
+                            return;
+                        }
+                        
+                        const filename = `deer-${selectedModel}-cropped-${targetWidth}x${targetHeight}.jpg`;
+                        
+                        // Method 1: Try modern download approach
+                        if (navigator.msSaveBlob) {
+                            // IE/Edge
+                            navigator.msSaveBlob(blob, filename);
+                        } else {
+                            // Modern browsers
+                            const url = URL.createObjectURL(blob);
+                            
+                            // Create download link with more explicit settings
+                            const downloadLink = document.createElement('a');
+                            downloadLink.href = url;
+                            downloadLink.download = filename;
+                            downloadLink.style.display = 'none';
+                            
+                            // Force download by adding to DOM and triggering click
+                            document.body.appendChild(downloadLink);
+                            
+                            // Use setTimeout to ensure DOM is updated
+                            setTimeout(() => {
+                                try {
+                                    downloadLink.click();
+                                    
+                                    // Clean up after download
+                                    setTimeout(() => {
+                                        document.body.removeChild(downloadLink);
+                                        URL.revokeObjectURL(url);
+                                    }, 100);
+                                    
+                                } catch (error) {
+                                    // Fallback: Show image in new window
+                                    const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+                                    const newWindow = window.open();
+                                    if (newWindow) {
+                                        newWindow.document.write(`
+                                            <html>
+                                                <head><title>Cropped Deer Image</title></head>
+                                                <body style="margin:0; text-align:center; background:#f0f0f0;">
+                                                    <h3>Right-click the image below and "Save As"</h3>
+                                                    <img src="${dataUrl}" alt="Cropped deer image" style="max-width:100%; border:1px solid #ccc;"/>
+                                                    <p>Filename: ${filename}</p>
+                                                </body>
+                                            </html>
+                                        `);
+                                    } else {
+                                        alert('Download blocked! Please allow popups or check your browser download settings.');
+                                    }
+                                }
+                            }, 10);
+                        }
+                        
+                    }, 'image/jpeg', 0.95);
+                    
+                } catch (error) {
+                    console.error('Error creating cropped image:', error);
+                    alert('Error creating cropped image. Check console for details.');
+                }
+            };
+            
+            img.onerror = () => {
+                alert('Error loading image for cropping');
+            };
+            
+            // Load the original uploaded image
+            img.src = uploadedImage;
+        }
+
+        async function sendToAnalysis() {
+            console.log('sendToAnalysis function called'); // Debug
+            
+            if (!uploadedImage || !selectedModel) {
+                alert('Please select a model and upload an image first!');
+                return;
+            }
+
+            if (selectedModel !== 'jawbone') {
+                alert('AI analysis is currently only available for jawbone images!');
+                return;
+            }
+
+            console.log('Starting analysis...'); // Debug
+
+            // Show loading
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('cropInterface').style.display = 'none';
+            
+            try {
+                // Wait a moment for any DOM updates to complete
+                await new Promise(resolve => setTimeout(resolve, 100));
+                
+                // FIXED: Use proper two-step cropping to preserve accuracy
+                const cropImage = document.getElementById('cropImage');
+                
+                // Force a reflow to ensure dimensions are calculated
+                cropImage.offsetHeight; // Force reflow
+                
+                console.log('Crop data:', cropData); // Debug
+                
+                // Get image dimensions - use multiple methods for reliability
+                const rect = cropImage.getBoundingClientRect();
+                const displayWidth = cropImage.offsetWidth || cropImage.clientWidth || rect.width || cropImage.width;
+                const displayHeight = cropImage.offsetHeight || cropImage.clientHeight || rect.height || cropImage.height;
+                const naturalWidth = cropImage.naturalWidth;
+                const naturalHeight = cropImage.naturalHeight;
+                
+                console.log('All dimension methods:', {
+                    offsetWidth: cropImage.offsetWidth,
+                    offsetHeight: cropImage.offsetHeight,
+                    clientWidth: cropImage.clientWidth,
+                    clientHeight: cropImage.clientHeight,
+                    boundingRect: rect,
+                    width: cropImage.width,
+                    height: cropImage.height,
+                    naturalWidth: naturalWidth,
+                    naturalHeight: naturalHeight,
+                    style: {
+                        width: cropImage.style.width,
+                        height: cropImage.style.height,
+                        display: cropImage.style.display
+                    }
+                }); // Debug
+                
+                console.log('Final selected dimensions:', {
+                    display: { width: displayWidth, height: displayHeight },
+                    natural: { width: naturalWidth, height: naturalHeight }
+                }); // Debug
+                
+                // Validate image dimensions
+                if (!naturalWidth || !naturalHeight) {
+                    throw new Error('Image not properly loaded. Natural dimensions are 0.');
+                }
+                
+                // If display dimensions are still 0, use a fallback approach
+                let finalDisplayWidth = displayWidth;
+                let finalDisplayHeight = displayHeight;
+                
+                if (!displayWidth || !displayHeight) {
+                    console.log('Display dimensions are 0, trying fallback approach...'); // Debug
+                    
+                    // Fallback: Get the container dimensions or use natural dimensions
+                    const container = cropImage.parentElement;
+                    const containerRect = container ? container.getBoundingClientRect() : null;
+                    
+                    console.log('Container dimensions:', containerRect); // Debug
+                    
+                    // If we still can't get display dimensions, calculate them based on max-width/max-height
+                    const maxWidth = 500; // From your CSS
+                    const maxHeight = 500; // From your CSS
+                    
+                    const aspectRatio = naturalWidth / naturalHeight;
+                    
+                    if (aspectRatio > 1) {
+                        // Wider than tall
+                        finalDisplayWidth = Math.min(naturalWidth, maxWidth);
+                        finalDisplayHeight = finalDisplayWidth / aspectRatio;
+                    } else {
+                        // Taller than wide
+                        finalDisplayHeight = Math.min(naturalHeight, maxHeight);
+                        finalDisplayWidth = finalDisplayHeight * aspectRatio;
+                    }
+                    
+                    console.log('Calculated display dimensions:', {
+                        width: finalDisplayWidth,
+                        height: finalDisplayHeight
+                    }); // Debug
+                }
+                
+                if (!finalDisplayWidth || !finalDisplayHeight) {
+                    throw new Error(`Still unable to determine display dimensions. Natural: ${naturalWidth}x${naturalHeight}, Display: ${finalDisplayWidth}x${finalDisplayHeight}`);
+                }
+                
+                // Validate crop data
+                if (!cropData || cropData.width <= 0 || cropData.height <= 0) {
+                    throw new Error('Invalid crop area. Please make sure you have drawn a crop rectangle.');
+                }
+                
+                // Calculate scale factors between displayed image and actual image
+                const scaleX = naturalWidth / finalDisplayWidth;
+                const scaleY = naturalHeight / finalDisplayHeight;
+                
+                console.log('Scale factors:', { scaleX, scaleY }); // Debug
+                
+                const actualCropX = Math.max(0, cropData.x * scaleX);
+                const actualCropY = Math.max(0, cropData.y * scaleY);
+                const actualCropWidth = Math.max(1, cropData.width * scaleX);
+                const actualCropHeight = Math.max(1, cropData.height * scaleY);
+                
+                // Ensure crop doesn't exceed image bounds
+                const maxWidth = naturalWidth - actualCropX;
+                const maxHeight = naturalHeight - actualCropY;
+                
+                const finalCropWidth = Math.min(actualCropWidth, maxWidth);
+                const finalCropHeight = Math.min(actualCropHeight, maxHeight);
+                
+                console.log('Final crop coordinates:', {
+                    x: actualCropX, y: actualCropY, 
+                    width: finalCropWidth, height: finalCropHeight
+                }); // Debug
+                
+                // Validate final crop dimensions
+                if (finalCropWidth <= 0 || finalCropHeight <= 0) {
+                    throw new Error('Invalid crop dimensions after scaling. Crop area is too small or outside image bounds.');
+                }
+                
+                // Step 1: Extract crop at original dimensions
+                const tempCanvas = document.createElement('canvas');
+                const tempCtx = tempCanvas.getContext('2d');
+                
+                tempCanvas.width = finalCropWidth;
+                tempCanvas.height = finalCropHeight;
+                
+                console.log('Temp canvas dimensions:', { width: tempCanvas.width, height: tempCanvas.height }); // Debug
+                
+                // Create image and extract the crop
+                const img = new Image();
+                img.onload = async () => {
+                    try {
+                        console.log('Image loaded, starting crop process'); // Debug
+                        
+                        // Validate image loaded properly
+                        if (!img.naturalWidth || !img.naturalHeight) {
+                            throw new Error('Loaded image has invalid dimensions');
+                        }
+                        
+                        // Clear temp canvas
+                        tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
+                        
+                        // Draw the cropped region at original size
+                        tempCtx.drawImage(
+                            img, 
+                            actualCropX, actualCropY, finalCropWidth, finalCropHeight,
+                            0, 0, finalCropWidth, finalCropHeight
+                        );
+                        
+                        // Step 2: Scale to 448x224 for the model
+                        const modelCanvas = document.createElement('canvas');
+                        const modelCtx = modelCanvas.getContext('2d');
+                        
+                        modelCanvas.width = 448;
+                        modelCanvas.height = 224;
+                        
+                        console.log('Model canvas dimensions:', { width: modelCanvas.width, height: modelCanvas.height }); // Debug
+                        
+                        // Improve rendering quality
+                        modelCtx.imageSmoothingEnabled = true;
+                        modelCtx.imageSmoothingQuality = 'high';
+                        
+                        // Clear model canvas
+                        modelCtx.clearRect(0, 0, 448, 224);
+                        
+                        // Draw the cropped image scaled to model requirements
+                        modelCtx.drawImage(tempCanvas, 0, 0, 448, 224);
+                        
+                        // Convert to base64
+                        const base64Data = modelCanvas.toDataURL('image/jpeg', 0.95);
+                        console.log('Image processed, base64 length:', base64Data.length); // Debug
+                        
+                        // Send to Flask API
+                        const response = await fetch('http://127.0.0.1:5000/analyze', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                image: base64Data
+                            })
+                        });
+                        
+                        console.log('API Response status:', response.status); // Debug
+                        
+                        if (!response.ok) {
+                            const errorText = await response.text();
+                            throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+                        }
+                        
+                        const result = await response.json();
+                        console.log('API Result:', result); // Debug
+                        
+                        if (result.success) {
+                            // Show results with side-by-side images
+                            showAnalysisResults(result, base64Data);
+                        } else {
+                            alert(`Analysis failed: ${result.error || 'Unknown error'}`);
+                        }
+                        
+                    } catch (imgError) {
+                        console.error('Error in image processing:', imgError);
+                        alert('Error processing image: ' + imgError.message);
+                    } finally {
+                        document.getElementById('loading').style.display = 'none';
+                        document.getElementById('cropInterface').style.display = 'block';
+                    }
+                };
+                
+                img.onerror = () => {
+                    console.error('Failed to load image');
+                    alert('Failed to load image for processing');
+                    document.getElementById('loading').style.display = 'none';
+                    document.getElementById('cropInterface').style.display = 'block';
+                };
+                
+                // Add crossOrigin for better compatibility
+                img.crossOrigin = 'anonymous';
+                img.src = uploadedImage;
+                
+            } catch (error) {
+                console.error('Analysis error:', error);
+                alert('Error: ' + error.message);
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('cropInterface').style.display = 'block';
+            }
+        }
+
+        // Add this new function to display results with side-by-side images
+        function showAnalysisResults(result, originalCroppedImage) {
+            const resultsHtml = `
+                <div class="results-section">
+                    <div class="results-header">
+                        <h2>🦴 Jawbone Analysis Results</h2>
+                    </div>
+                    
+                    <div class="results-grid">
+                        <div class="result-card age-card">
+                            <div class="result-label">Estimated Age</div>
+                            <div class="age-value">${result.age}+ years</div>
+                        </div>
+                        
+                        <div class="result-card confidence-card">
+                            <div class="result-label">Confidence</div>
+                            <div class="confidence-value">${Math.round(result.confidence * 100)}%</div>
+                        </div>
+                    </div>
+                    
+                    <div class="images-comparison">
+                        <h3>AI Focus Analysis</h3>
+                        <div class="image-pair">
+                            <div class="image-container">
+                                <h4>Original Jawbone</h4>
+                                <img src="${originalCroppedImage}" class="comparison-image" alt="Original Cropped Jawbone">
+                            </div>
+                            
+                            <div class="image-container">
+                                <h4>AI Attention Areas</h4>
+                                <div style="position: relative; display: inline-block;">
+                                    <img src="${originalCroppedImage}" class="comparison-image" alt="Original Jawbone Background" style="display: block;">
+                                    <img src="data:image/png;base64,${result.heatmap_base64}" class="comparison-image" alt="AI Attention Heatmap" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0.7; mix-blend-mode: multiply;">
+                                </div>
+                                <p style="font-size: 0.9em; color: #666; margin-top: 8px;">Red areas = high attention</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div style="text-align: center;">
+                        <button onclick="this.parentElement.parentElement.remove()" class="close-btn">
+                            Close Results
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            // Insert results after the crop interface
+            const cropInterface = document.getElementById('cropInterface');
+            cropInterface.insertAdjacentHTML('afterend', resultsHtml);
+            
+            // Scroll to results
+            setTimeout(() => {
+                const resultsDiv = cropInterface.nextElementSibling;
+                resultsDiv.scrollIntoView({ behavior: 'smooth' });
+            }, 100);
+        }
+    </script>
+</body>
+</html>
