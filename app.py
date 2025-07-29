@@ -272,7 +272,7 @@ analyzer = None
 def download_model():
     """Download model from Google Drive if not already present"""
     # TODO: Replace with your actual Google Drive file ID
-    MODEL_URL = "https://drive.google.com/file/d/15s0KeGPu6rtGTW2qJOLUgL9i9Qv2Sydw/view?usp=sharing"
+    MODEL_URL = "https://drive.google.com/uc?id=15s0KeGPu6rtGTW2qJOLUgL9i9Qv2Sydw&export=download"
     local_path = "/app/jawbone_ensemble.pth"
 
     # Check if model already exists
