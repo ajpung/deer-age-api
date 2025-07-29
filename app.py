@@ -350,12 +350,10 @@ def init_model():
         traceback.print_exc()
         return False
 
+# Initialize model for gunicorn
+print("Starting Jawbone Analysis API...")
+init_model()
+print("API deployed")
+
 if __name__ == '__main__':
-    print("🦴 Starting Jawbone Analysis API...")
-    
-    if init_model():
-        print("🚀 API ready!")
-        app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
-    else:
-        print("❌ Failed to start - model not loaded")
-        exit(1)
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
