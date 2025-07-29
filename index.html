@@ -1271,7 +1271,7 @@
                         console.log('Image processed, base64 length:', base64Data.length); // Debug
                         
                         // Send to Flask API
-                        const response = await fetch('http://127.0.0.1:5000/analyze', {
+                        const response = await fetch('https://deer-age-api-production.up.railway.app/analyze', {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
