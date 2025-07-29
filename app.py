@@ -16,7 +16,9 @@ import traceback
 import urllib.request
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for web requests
+CORS(app, origins=["https://agemydeer.com",
+                   "http://agemydeer.com",
+                   "https://www.agemydeer.com"])
 
 
 class GradCAM:
