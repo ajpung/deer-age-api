@@ -13,9 +13,11 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import os
 import traceback
+import urllib.request
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for web requests
+
 
 class GradCAM:
     def __init__(self, model):
@@ -23,66 +25,67 @@ class GradCAM:
         self.target_layer = None
         self.gradients = None
         self.activations = None
-        
+
         # Find the last convolutional layer
         for name, module in self.model.named_modules():
             if isinstance(module, nn.Conv2d):
                 self.target_layer = module
-        
+
         if self.target_layer is not None:
             self.target_layer.register_forward_hook(self.save_activation)
             self.target_layer.register_backward_hook(self.save_gradient)
-    
+
     def save_activation(self, module, input, output):
         self.activations = output
-    
+
     def save_gradient(self, module, grad_input, grad_output):
         self.gradients = grad_output[0]
-    
+
     def generate_cam(self, input_tensor, class_idx):
         if self.target_layer is None:
             return None
-            
+
         try:
             # Forward pass
             self.model.eval()
             output = self.model(input_tensor)
-            
+
             # Backward pass
             self.model.zero_grad()
             output[0, class_idx].backward(retain_graph=True)
-            
+
             if self.gradients is None or self.activations is None:
                 return None
-            
+
             # Generate CAM
             gradients = self.gradients.cpu().data.numpy()[0]
             activations = self.activations.cpu().data.numpy()[0]
-            
+
             weights = np.mean(gradients, axis=(1, 2))
             cam = np.zeros(activations.shape[1:], dtype=np.float32)
-            
+
             for i, w in enumerate(weights):
                 cam += w * activations[i]
-            
+
             cam = np.maximum(cam, 0)
             if cam.max() > 0:
                 cam = cam / cam.max()
-            
+
             # Resize to input image size
             cam = cv2.resize(cam, (448, 224))
-            
+
             return cam
         except Exception as e:
             print(f"GradCAM error: {e}")
             return None
+
 
 class JawboneAnalyzer:
     def __init__(self, checkpoint_path):
         """Initialize the jawbone analyzer"""
         print("Loading jawbone ensemble...")
         self.checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
-        
+
         # Extract info
         self.architectures = self.checkpoint['architectures_used']
         self.num_classes = self.checkpoint['num_classes']
@@ -90,26 +93,26 @@ class JawboneAnalyzer:
         self.label_mapping = self.checkpoint['label_mapping']
         self.state_dicts = self.checkpoint['model_state_dicts']
         self.cv_scores = self.checkpoint['cv_scores']
-        
+
         # Create models
         self.models = []
         self._load_models()
-        
+
         # Calculate ensemble weights
         scores_array = np.array(self.cv_scores)
         self.weights = np.exp(scores_array / 20)
         self.weights = self.weights / self.weights.sum()
-        
-        print(f"✓ Loaded ensemble with {len(self.models)} models")
-        print(f"✓ CV Scores: {[f'{score:.1f}%' for score in self.cv_scores]}")
-    
+
+        print(f"Loaded ensemble with {len(self.models)} models")
+        print(f"CV Scores: {[f'{score:.1f}%' for score in self.cv_scores]}")
+
     def _load_models(self):
         """Load each model in the ensemble"""
         for i, (arch, state_dict) in enumerate(zip(self.architectures, self.state_dicts)):
             try:
                 # Create model using timm
                 model = timm.create_model(arch, pretrained=False, num_classes=self.num_classes)
-                
+
                 # Recreate classifier structure
                 if hasattr(model, 'fc'):
                     in_features = model.fc.in_features
@@ -130,98 +133,98 @@ class JawboneAnalyzer:
                             nn.Dropout(0.3),
                             nn.Linear(in_features, self.num_classes)
                         )
-                
+
                 # Load weights
                 model.load_state_dict(state_dict, strict=True)
                 model.eval()
                 self.models.append(model)
-                print(f"✓ Model {i+1} ({arch}) loaded")
+                print(f"Model {i + 1} ({arch}) loaded")
             except Exception as e:
-                print(f"❌ Failed to load model {i+1}: {e}")
+                print(f"Failed to load model {i + 1}: {e}")
                 raise
-    
+
     def preprocess_image(self, image_data):
         """Preprocess image from base64 data"""
         try:
             # Decode base64
             if ',' in image_data:
                 image_data = image_data.split(',')[1]
-            
+
             image_bytes = base64.b64decode(image_data)
             image_array = np.frombuffer(image_bytes, np.uint8)
             img = cv2.imdecode(image_array, cv2.IMREAD_COLOR)
-            
+
             if img is None:
                 raise ValueError("Could not decode image")
-            
+
             # Convert BGR to RGB
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            
+
             # Resize to training size
             img_resized = cv2.resize(img, (self.input_size[1], self.input_size[0]))
-            
+
             # Normalize
             if img_resized.max() > 1.0:
                 img_resized = img_resized / 255.0
-            
+
             # Convert to tensor
             img_tensor = torch.FloatTensor(img_resized).permute(2, 0, 1)
-            
+
             # ImageNet normalization
             mean = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
             std = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
             img_normalized = (img_tensor - mean) / std
-            
+
             return img_normalized.unsqueeze(0), img_resized
-            
+
         except Exception as e:
             print(f"Preprocessing error: {e}")
             raise
-    
+
     def generate_heatmap(self, input_tensor, predicted_class, original_image):
         """Generate attention heatmap"""
         try:
             # Use the model with highest CV score
             best_model_idx = np.argmax(self.cv_scores)
             best_model = self.models[best_model_idx]
-            
+
             # Generate Grad-CAM
             grad_cam = GradCAM(best_model)
             heatmap = grad_cam.generate_cam(input_tensor, predicted_class)
-            
+
             if heatmap is None:
                 # Fallback: create a simple center-focused heatmap
                 h, w = original_image.shape[:2]
                 y, x = np.ogrid[:h, :w]
                 center_y, center_x = h // 2, w // 2
-                heatmap = np.exp(-((x - center_x)**2 + (y - center_y)**2) / (min(h, w) / 3)**2)
+                heatmap = np.exp(-((x - center_x) ** 2 + (y - center_y) ** 2) / (min(h, w) / 3) ** 2)
                 heatmap = heatmap / heatmap.max()
-            
+
             # Create overlay image
             heatmap_colored = cm.jet(heatmap)[:, :, :3]  # Remove alpha channel
             overlay = (original_image * 0.6 + heatmap_colored * 0.4 * 255).astype(np.uint8)
-            
+
             # Convert to base64
             overlay_pil = Image.fromarray(overlay)
             buffer = io.BytesIO()
             overlay_pil.save(buffer, format='PNG')
             heatmap_base64 = base64.b64encode(buffer.getvalue()).decode()
-            
+
             return heatmap_base64
-            
+
         except Exception as e:
             print(f"Heatmap generation error: {e}")
             return None
-    
+
     def analyze_image(self, image_data):
         """Main analysis function"""
         try:
             # Preprocess image
             input_tensor, original_image = self.preprocess_image(image_data)
-            
+
             # Get ensemble predictions
             ensemble_output = torch.zeros(1, self.num_classes)
-            
+
             with torch.no_grad():
                 for model, weight in zip(self.models, self.weights):
                     # Original prediction
@@ -232,19 +235,19 @@ class JawboneAnalyzer:
                     # Average and weight
                     avg_output = (output1 + output2) / 2
                     ensemble_output += weight * F.softmax(avg_output, dim=1)
-            
+
             # Get final prediction
             probabilities = ensemble_output[0]
             predicted_class = torch.argmax(probabilities).item()
             confidence = probabilities[predicted_class].item()
-            
+
             # Convert class index to age
             rating_mapping = {v: k for k, v in self.label_mapping.items()}
             predicted_age = rating_mapping[predicted_class]
-            
+
             # Generate heatmap
             heatmap_base64 = self.generate_heatmap(input_tensor, predicted_class, original_image)
-            
+
             return {
                 'success': True,
                 'age': float(predicted_age),
@@ -252,7 +255,7 @@ class JawboneAnalyzer:
                 'heatmap_base64': heatmap_base64,
                 'all_probabilities': probabilities.tolist()
             }
-            
+
         except Exception as e:
             print(f"Analysis error: {e}")
             traceback.print_exc()
@@ -261,8 +264,59 @@ class JawboneAnalyzer:
                 'error': str(e)
             }
 
+
 # Global analyzer instance
 analyzer = None
+
+
+def download_model():
+    """Download model from Google Drive if not already present"""
+    # TODO: Replace with your actual Google Drive file ID
+    MODEL_URL = "https://drive.google.com/file/d/15s0KeGPu6rtGTW2qJOLUgL9i9Qv2Sydw/view?usp=sharing"
+    local_path = "/app/jawbone_ensemble.pth"
+
+    # Check if model already exists
+    if os.path.exists(local_path):
+        file_size = os.path.getsize(local_path)
+        print(f"Model already exists: {local_path} ({file_size} bytes)")
+        return local_path
+
+    try:
+        print(" Downloading model from Google Drive...")
+
+        # Create directory if it doesn't exist
+        os.makedirs(os.path.dirname(local_path), exist_ok=True)
+
+        # Download the file
+        urllib.request.urlretrieve(MODEL_URL, local_path)
+
+        # Verify download
+        if os.path.exists(local_path):
+            file_size = os.path.getsize(local_path)
+            print(f" Model downloaded successfully! Size: {file_size} bytes")
+
+            # Basic validation - check if it's a PyTorch file
+            try:
+                with open(local_path, 'rb') as f:
+                    first_bytes = f.read(10)
+                    if first_bytes.startswith(b'PK'):  # ZIP/PyTorch format
+                        print(" File appears to be a valid PyTorch model")
+                        return local_path
+                    else:
+                        print(f"️Warning: File doesn't appear to be PyTorch format. First bytes: {first_bytes}")
+                        return local_path
+            except Exception as e:
+                print(f"Could not validate file format: {e}")
+                return local_path
+        else:
+            print("Download failed - file not found after download")
+            return None
+
+    except Exception as e:
+        print(f"Failed to download model: {e}")
+        traceback.print_exc()
+        return None
+
 
 @app.route('/health', methods=['GET'])
 def health_check():
@@ -272,6 +326,7 @@ def health_check():
         'model_loaded': analyzer is not None
     })
 
+
 @app.route('/analyze', methods=['POST'])
 def analyze_endpoint():
     """Main analysis endpoint"""
@@ -279,26 +334,26 @@ def analyze_endpoint():
         if analyzer is None:
             return jsonify({
                 'success': False,
-                'error': 'Model not loaded'
+                'error': 'Model not loaded - check server logs for model download status'
             }), 500
-        
+
         # Get image data from request
         data = request.get_json()
-        
+
         if not data or 'image' not in data:
             return jsonify({
                 'success': False,
                 'error': 'No image data provided'
             }), 400
-        
+
         # Analyze image
         result = analyzer.analyze_image(data['image'])
-        
+
         if result['success']:
             return jsonify(result)
         else:
             return jsonify(result), 400
-            
+
     except Exception as e:
         print(f"Endpoint error: {e}")
         traceback.print_exc()
@@ -307,53 +362,50 @@ def analyze_endpoint():
             'error': 'Internal server error'
         }), 500
 
+
 @app.route('/', methods=['GET'])
 def home():
     """Home endpoint"""
+    model_status = "Loaded" if analyzer is not None else "Not loaded"
+
     return jsonify({
         'message': 'Jawbone Analysis API',
         'status': 'running',
+        'model_status': model_status,
         'endpoints': {
             'health': '/health',
             'analyze': '/analyze (POST)'
         }
     })
 
+
 def init_model():
     """Initialize the model"""
     global analyzer
-    
-    # Look for model file
-    model_paths = [
-        'jawbone_ensemble.pth',
-        './jawbone_ensemble.pth',
-        '/app/jawbone_ensemble.pth'  # Railway path
-    ]
-    
-    model_path = None
-    for path in model_paths:
-        if os.path.exists(path):
-            model_path = path
-            break
-    
-    if model_path is None:
-        print("❌ Model file not found!")
-        print("Available files:", os.listdir('.'))
-        return False
-    
+
     try:
+        # First try to download/find the model
+        model_path = download_model()
+
+        if not model_path:
+            print("Could not download or find model file")
+            return False
+
+        # Try to load the model
         analyzer = JawboneAnalyzer(model_path)
-        print("✅ Model loaded successfully!")
+        print("Model loaded successfully!")
         return True
+
     except Exception as e:
-        print(f"❌ Failed to load model: {e}")
+        print(f"Failed to initialize model: {e}")
         traceback.print_exc()
         return False
+
 
 # Initialize model for gunicorn
 print("Starting Jawbone Analysis API...")
 init_model()
-print("API deployed")
+print("API ready!")
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
