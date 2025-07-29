@@ -274,12 +274,18 @@ def download_model():
     # TODO: Replace with your actual Google Drive file ID
     MODEL_URL = "https://drive.google.com/uc?id=15s0KeGPu6rtGTW2qJOLUgL9i9Qv2Sydw&export=download"
     local_path = "/app/jawbone_ensemble.pth"
+    expected_min_size = 100000000
 
-    # Check if model already exists
+    # Check if model already exists and is valid size
     if os.path.exists(local_path):
         file_size = os.path.getsize(local_path)
         print(f"Model already exists: {local_path} ({file_size} bytes)")
-        return local_path
+
+        if file_size > expected_min_size:
+            return local_path
+        else:
+            print(f"File too small ({file_size} bytes), re-downloading...")
+            os.remove(local_path)
 
     try:
         print(" Downloading model from Google Drive...")
