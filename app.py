@@ -271,10 +271,9 @@ analyzer = None
 
 def download_model():
     """Download model from Google Drive if not already present"""
-    # TODO: Replace with your actual Google Drive file ID
-    MODEL_URL = "https://drive.google.com/uc?id=15s0KeGPu6rtGTW2qJOLUgL9i9Qv2Sydw&export=download"
+    MODEL_URL = "https://drive.google.com/uc?id=15s0KeGPu6rtGTW2qJOLUgL9i9Qv2Sydw&export=download&confirm=1"
     local_path = "/app/jawbone_ensemble.pth"
-    expected_min_size = 100000000
+    expected_min_size = 100000000  # 100MB minimum
 
     # Check if model already exists and is valid size
     if os.path.exists(local_path):
@@ -288,28 +287,33 @@ def download_model():
             os.remove(local_path)
 
     try:
-        print(" Downloading model from Google Drive...")
+        print("Downloading model from Google Drive...")
 
         # Create directory if it doesn't exist
         os.makedirs(os.path.dirname(local_path), exist_ok=True)
 
-        # Download the file
-        urllib.request.urlretrieve(MODEL_URL, local_path)
+        # Create request with headers to avoid HTML redirect page
+        req = urllib.request.Request(MODEL_URL)
+        req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
+
+        with urllib.request.urlopen(req) as response:
+            with open(local_path, 'wb') as f:
+                f.write(response.read())
 
         # Verify download
         if os.path.exists(local_path):
             file_size = os.path.getsize(local_path)
-            print(f" Model downloaded successfully! Size: {file_size} bytes")
+            print(f"Model downloaded successfully! Size: {file_size} bytes")
 
             # Basic validation - check if it's a PyTorch file
             try:
                 with open(local_path, 'rb') as f:
                     first_bytes = f.read(10)
                     if first_bytes.startswith(b'PK'):  # ZIP/PyTorch format
-                        print(" File appears to be a valid PyTorch model")
+                        print("File appears to be a valid PyTorch model")
                         return local_path
                     else:
-                        print(f"️Warning: File doesn't appear to be PyTorch format. First bytes: {first_bytes}")
+                        print(f"Warning: File doesn't appear to be PyTorch format. First bytes: {first_bytes}")
                         return local_path
             except Exception as e:
                 print(f"Could not validate file format: {e}")
