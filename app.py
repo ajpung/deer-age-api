@@ -26,7 +26,6 @@ class GradCAM:
         self.gradients = None
         self.activations = None
 
-        # Find the last convolutional layer
         for name, module in self.model.named_modules():
             if isinstance(module, nn.Conv2d):
                 self.target_layer = module
@@ -46,18 +45,15 @@ class GradCAM:
             return None
 
         try:
-            # Forward pass
             self.model.eval()
             output = self.model(input_tensor)
 
-            # Backward pass
             self.model.zero_grad()
             output[0, class_idx].backward(retain_graph=True)
 
             if self.gradients is None or self.activations is None:
                 return None
 
-            # Generate CAM
             gradients = self.gradients.cpu().data.numpy()[0]
             activations = self.activations.cpu().data.numpy()[0]
 
@@ -71,7 +67,6 @@ class GradCAM:
             if cam.max() > 0:
                 cam = cam / cam.max()
 
-            # Resize to input image size
             cam = cv2.resize(cam, (448, 224))
 
             return cam
@@ -82,11 +77,9 @@ class GradCAM:
 
 class JawboneAnalyzer:
     def __init__(self, checkpoint_path):
-        """Initialize the jawbone analyzer"""
         print("Loading jawbone ensemble...")
         self.checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
 
-        # Extract info
         self.architectures = self.checkpoint['architectures_used']
         self.num_classes = self.checkpoint['num_classes']
         self.input_size = self.checkpoint['input_size']
@@ -94,11 +87,9 @@ class JawboneAnalyzer:
         self.state_dicts = self.checkpoint['model_state_dicts']
         self.cv_scores = self.checkpoint['cv_scores']
 
-        # Create models
         self.models = []
         self._load_models()
 
-        # Calculate ensemble weights
         scores_array = np.array(self.cv_scores)
         self.weights = np.exp(scores_array / 20)
         self.weights = self.weights / self.weights.sum()
@@ -107,13 +98,10 @@ class JawboneAnalyzer:
         print(f"CV Scores: {[f'{score:.1f}%' for score in self.cv_scores]}")
 
     def _load_models(self):
-        """Load each model in the ensemble"""
         for i, (arch, state_dict) in enumerate(zip(self.architectures, self.state_dicts)):
             try:
-                # Create model using timm
                 model = timm.create_model(arch, pretrained=False, num_classes=self.num_classes)
 
-                # Recreate classifier structure
                 if hasattr(model, 'fc'):
                     in_features = model.fc.in_features
                     model.fc = nn.Sequential(
@@ -134,7 +122,6 @@ class JawboneAnalyzer:
                             nn.Linear(in_features, self.num_classes)
                         )
 
-                # Load weights
                 model.load_state_dict(state_dict, strict=True)
                 model.eval()
                 self.models.append(model)
@@ -143,14 +130,11 @@ class JawboneAnalyzer:
                 print(f"Failed to load model {i + 1}: {e}")
                 raise
 
-        # Keep only the single best model for maximum speed optimization
         if len(self.models) > 1:
             print(f"Reducing from {len(self.models)} to 1 best model for maximum speed...")
 
-            # Get index of highest CV score
             best_index = np.argmax(self.cv_scores)
 
-            # Keep only the best model and its data
             self.models = [self.models[best_index]]
             self.architectures = [self.architectures[best_index]]
             self.cv_scores = [self.cv_scores[best_index]]
@@ -158,9 +142,7 @@ class JawboneAnalyzer:
             print(f"Using single best model with CV score: {self.cv_scores[0]:.1f}%")
 
     def preprocess_image(self, image_data):
-        """Preprocess image from base64 data"""
         try:
-            # Decode base64
             if ',' in image_data:
                 image_data = image_data.split(',')[1]
 
@@ -171,20 +153,15 @@ class JawboneAnalyzer:
             if img is None:
                 raise ValueError("Could not decode image")
 
-            # Convert BGR to RGB
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
-            # Resize to training size
             img_resized = cv2.resize(img, (self.input_size[1], self.input_size[0]))
 
-            # Normalize
             if img_resized.max() > 1.0:
                 img_resized = img_resized / 255.0
 
-            # Convert to tensor
             img_tensor = torch.FloatTensor(img_resized).permute(2, 0, 1)
 
-            # ImageNet normalization
             mean = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
             std = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
             img_normalized = (img_tensor - mean) / std
@@ -196,29 +173,23 @@ class JawboneAnalyzer:
             raise
 
     def generate_heatmap(self, input_tensor, predicted_class, original_image):
-        """Generate attention heatmap"""
         try:
-            # Use the model with highest CV score
             best_model_idx = np.argmax(self.cv_scores)
             best_model = self.models[best_model_idx]
 
-            # Generate Grad-CAM
             grad_cam = GradCAM(best_model)
             heatmap = grad_cam.generate_cam(input_tensor, predicted_class)
 
             if heatmap is None:
-                # Fallback: create a simple center-focused heatmap
                 h, w = original_image.shape[:2]
                 y, x = np.ogrid[:h, :w]
                 center_y, center_x = h // 2, w // 2
                 heatmap = np.exp(-((x - center_x) ** 2 + (y - center_y) ** 2) / (min(h, w) / 3) ** 2)
                 heatmap = heatmap / heatmap.max()
 
-            # Create overlay image
-            heatmap_colored = cm.jet(heatmap)[:, :, :3]  # Remove alpha channel
+            heatmap_colored = cm.jet(heatmap)[:, :, :3]
             overlay = (original_image * 0.6 + heatmap_colored * 0.4 * 255).astype(np.uint8)
 
-            # Convert to base64
             overlay_pil = Image.fromarray(overlay)
             buffer = io.BytesIO()
             overlay_pil.save(buffer, format='PNG')
@@ -230,32 +201,27 @@ class JawboneAnalyzer:
             print(f"Heatmap generation error: {e}")
             return None
 
-    def analyze_image(self, image_data):
-        """Main analysis function"""
+    def analyze_image(self, image_data, include_heatmap=False):
         try:
-            # Preprocess image
             input_tensor, original_image = self.preprocess_image(image_data)
 
-            # Get ensemble predictions (no TTA for speed)
             ensemble_output = torch.zeros(1, self.num_classes)
 
             with torch.no_grad():
                 for model, weight in zip(self.models, self.weights):
-                    # Single prediction (no TTA)
                     output = model(input_tensor)
                     ensemble_output += weight * F.softmax(output, dim=1)
 
-            # Get final prediction
             probabilities = ensemble_output[0]
             predicted_class = torch.argmax(probabilities).item()
             confidence = probabilities[predicted_class].item()
 
-            # Convert class index to age
             rating_mapping = {v: k for k, v in self.label_mapping.items()}
             predicted_age = rating_mapping[predicted_class]
 
-            # Generate heatmap
-            heatmap_base64 = self.generate_heatmap(input_tensor, predicted_class, original_image)
+            heatmap_base64 = None
+            if include_heatmap:
+                heatmap_base64 = self.generate_heatmap(input_tensor, predicted_class, original_image)
 
             return {
                 'success': True,
@@ -274,17 +240,14 @@ class JawboneAnalyzer:
             }
 
 
-# Global analyzer instance
 analyzer = None
 
 
 def download_model():
-    """Download model from Dropbox if not already present"""
     MODEL_URL = "https://www.dropbox.com/scl/fi/ziq8fbcx7l8jlk3ea5ofd/jawbone_ensemble.pth?rlkey=y7e51qh7xdvfj5k05x6ml4xzw&st=ndzw14qe&dl=1"
     local_path = "/app/jawbone_ensemble.pth"
-    expected_min_size = 100000000  # 100MB minimum
+    expected_min_size = 100000000
 
-    # Check if model already exists and is valid size
     if os.path.exists(local_path):
         file_size = os.path.getsize(local_path)
         print(f"Model already exists: {local_path} ({file_size} bytes)")
@@ -316,7 +279,6 @@ def download_model():
 
 @app.route('/health', methods=['GET'])
 def health_check():
-    """Health check endpoint"""
     return jsonify({
         'status': 'healthy',
         'model_loaded': analyzer is not None
@@ -325,7 +287,6 @@ def health_check():
 
 @app.route('/analyze', methods=['POST'])
 def analyze_endpoint():
-    """Main analysis endpoint"""
     try:
         if analyzer is None:
             return jsonify({
@@ -333,7 +294,6 @@ def analyze_endpoint():
                 'error': 'Model not loaded - check server logs for model download status'
             }), 500
 
-        # Get image data from request
         data = request.get_json()
 
         if not data or 'image' not in data:
@@ -342,8 +302,9 @@ def analyze_endpoint():
                 'error': 'No image data provided'
             }), 400
 
-        # Analyze image
-        result = analyzer.analyze_image(data['image'])
+        include_heatmap = data.get('include_heatmap', False)
+
+        result = analyzer.analyze_image(data['image'], include_heatmap)
 
         if result['success']:
             return jsonify(result)
@@ -361,7 +322,6 @@ def analyze_endpoint():
 
 @app.route('/', methods=['GET'])
 def home():
-    """Home endpoint"""
     model_status = "Loaded" if analyzer is not None else "Not loaded"
 
     return jsonify({
@@ -376,18 +336,15 @@ def home():
 
 
 def init_model():
-    """Initialize the model"""
     global analyzer
 
     try:
-        # First try to download/find the model
         model_path = download_model()
 
         if not model_path:
             print("Could not download or find model file")
             return False
 
-        # Try to load the model
         analyzer = JawboneAnalyzer(model_path)
         print("Model loaded successfully!")
         return True
@@ -398,7 +355,6 @@ def init_model():
         return False
 
 
-# Initialize model for gunicorn
 print("Starting Jawbone Analysis API...")
 init_model()
 print("API ready!")
