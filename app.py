@@ -227,14 +227,9 @@ class JawboneAnalyzer:
 
             with torch.no_grad():
                 for model, weight in zip(self.models, self.weights):
-                    # Original prediction
-                    output1 = model(input_tensor)
-                    # Horizontal flip TTA
-                    flipped = torch.flip(input_tensor, [3])
-                    output2 = model(flipped)
-                    # Average and weight
-                    avg_output = (output1 + output2) / 2
-                    ensemble_output += weight * F.softmax(avg_output, dim=1)
+                    # Single prediction (no TTA)
+                    output = model(input_tensor)
+                    ensemble_output += weight * F.softmax(output, dim=1)
 
             # Get final prediction
             probabilities = ensemble_output[0]

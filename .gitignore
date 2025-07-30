@@ -12,6 +12,10 @@ __pycache__/
 # Idea folders
 .idea/
 
+# website image folders
+New folder/
+website images/
+
 # Distribution / packaging
 .Python
 build/
