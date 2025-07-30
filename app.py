@@ -143,6 +143,20 @@ class JawboneAnalyzer:
                 print(f"Failed to load model {i + 1}: {e}")
                 raise
 
+        # Keep only the 3 best models for speed optimization
+        if len(self.models) > 3:
+            print(f"Reducing from {len(self.models)} to 3 best models for speed...")
+
+            # Get indices of 3 highest CV scores
+            best_indices = np.argsort(self.cv_scores)[-3:]
+
+            # Keep only the best models and their data
+            self.models = [self.models[i] for i in best_indices]
+            self.architectures = [self.architectures[i] for i in best_indices]
+            self.cv_scores = [self.cv_scores[i] for i in best_indices]
+
+            print(f"Using top 3 models with CV scores: {[f'{score:.1f}%' for score in self.cv_scores]}")
+
     def preprocess_image(self, image_data):
         """Preprocess image from base64 data"""
         try:
@@ -222,7 +236,7 @@ class JawboneAnalyzer:
             # Preprocess image
             input_tensor, original_image = self.preprocess_image(image_data)
 
-            # Get ensemble predictions
+            # Get ensemble predictions (no TTA for speed)
             ensemble_output = torch.zeros(1, self.num_classes)
 
             with torch.no_grad():
