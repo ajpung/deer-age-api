@@ -67,7 +67,8 @@ class GradCAM:
             if cam.max() > 0:
                 cam = cam / cam.max()
 
-            cam = cv2.resize(cam, (448, 224))
+            input_height, input_width = input_tensor.shape[2], input_tensor.shape[3]
+            cam = cv2.resize(cam, (input_width, input_height))
 
             return cam
         except Exception as e:
@@ -75,9 +76,10 @@ class GradCAM:
             return None
 
 
-class JawboneAnalyzer:
-    def __init__(self, checkpoint_path):
-        print("Loading jawbone ensemble...")
+class DeerAnalyzer:
+    def __init__(self, checkpoint_path, model_name):
+        print(f"Loading {model_name} ensemble...")
+        self.model_name = model_name
         self.checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
 
         self.architectures = self.checkpoint['architectures_used']
@@ -94,7 +96,7 @@ class JawboneAnalyzer:
         self.weights = np.exp(scores_array / 20)
         self.weights = self.weights / self.weights.sum()
 
-        print(f"Loaded ensemble with {len(self.models)} models")
+        print(f"Loaded {model_name} ensemble with {len(self.models)} models")
         print(f"CV Scores: {[f'{score:.1f}%' for score in self.cv_scores]}")
 
     def _load_models(self):
@@ -240,17 +242,23 @@ class JawboneAnalyzer:
             }
 
 
-analyzer = None
+jawbone_analyzer = None
+trailcam_analyzer = None
 
 
-def download_model():
-    MODEL_URL = "https://www.dropbox.com/scl/fi/ziq8fbcx7l8jlk3ea5ofd/jawbone_ensemble.pth?rlkey=y7e51qh7xdvfj5k05x6ml4xzw&st=ndzw14qe&dl=1"
-    local_path = "/app/jawbone_ensemble.pth"
+def download_model(model_type):
+    if model_type == 'jawbone':
+        MODEL_URL = "https://www.dropbox.com/scl/fi/ziq8fbcx7l8jlk3ea5ofd/jawbone_ensemble.pth?rlkey=y7e51qh7xdvfj5k05x6ml4xzw&st=ndzw14qe&dl=1"
+        local_path = "/app/jawbone_ensemble.pth"
+    else:  # trailcam
+        MODEL_URL = "https://www.dropbox.com/scl/fi/mlxzmdxmbsva2xcjmk0aq/trailcam_ensemble.pth?rlkey=j20g65643vogy0etiyrlnbz97&dl=1"
+        local_path = "/app/trailcam_ensemble.pth"
+
     expected_min_size = 100000000
 
     if os.path.exists(local_path):
         file_size = os.path.getsize(local_path)
-        print(f"Model already exists: {local_path} ({file_size} bytes)")
+        print(f"{model_type} model already exists: {local_path} ({file_size} bytes)")
 
         if file_size > expected_min_size:
             return local_path
@@ -259,21 +267,21 @@ def download_model():
             os.remove(local_path)
 
     try:
-        print("Downloading model from Dropbox...")
+        print(f"Downloading {model_type} model from Dropbox...")
         os.makedirs(os.path.dirname(local_path), exist_ok=True)
 
         urllib.request.urlretrieve(MODEL_URL, local_path)
 
         if os.path.exists(local_path):
             file_size = os.path.getsize(local_path)
-            print(f"Model downloaded successfully! Size: {file_size} bytes")
+            print(f"{model_type} model downloaded successfully! Size: {file_size} bytes")
             return local_path
         else:
-            print("Download failed")
+            print(f"{model_type} download failed")
             return None
 
     except Exception as e:
-        print(f"Failed to download model: {e}")
+        print(f"Failed to download {model_type} model: {e}")
         return None
 
 
@@ -281,19 +289,14 @@ def download_model():
 def health_check():
     return jsonify({
         'status': 'healthy',
-        'model_loaded': analyzer is not None
+        'jawbone_loaded': jawbone_analyzer is not None,
+        'trailcam_loaded': trailcam_analyzer is not None
     })
 
 
 @app.route('/analyze', methods=['POST'])
 def analyze_endpoint():
     try:
-        if analyzer is None:
-            return jsonify({
-                'success': False,
-                'error': 'Model not loaded - check server logs for model download status'
-            }), 500
-
         data = request.get_json()
 
         if not data or 'image' not in data:
@@ -302,7 +305,28 @@ def analyze_endpoint():
                 'error': 'No image data provided'
             }), 400
 
+        model_type = data.get('model_type', 'jawbone')
         include_heatmap = data.get('include_heatmap', False)
+
+        if model_type == 'jawbone':
+            if jawbone_analyzer is None:
+                return jsonify({
+                    'success': False,
+                    'error': 'Jawbone model not loaded'
+                }), 500
+            analyzer = jawbone_analyzer
+        elif model_type == 'trailcam':
+            if trailcam_analyzer is None:
+                return jsonify({
+                    'success': False,
+                    'error': 'Trail camera model not loaded'
+                }), 500
+            analyzer = trailcam_analyzer
+        else:
+            return jsonify({
+                'success': False,
+                'error': f'Unknown model type: {model_type}'
+            }), 400
 
         result = analyzer.analyze_image(data['image'], include_heatmap)
 
@@ -322,12 +346,16 @@ def analyze_endpoint():
 
 @app.route('/', methods=['GET'])
 def home():
-    model_status = "Loaded" if analyzer is not None else "Not loaded"
+    jawbone_status = "Loaded" if jawbone_analyzer is not None else "Not loaded"
+    trailcam_status = "Loaded" if trailcam_analyzer is not None else "Not loaded"
 
     return jsonify({
-        'message': 'Jawbone Analysis API',
+        'message': 'Deer Age Analysis API',
         'status': 'running',
-        'model_status': model_status,
+        'models': {
+            'jawbone': jawbone_status,
+            'trailcam': trailcam_status
+        },
         'endpoints': {
             'health': '/health',
             'analyze': '/analyze (POST)'
@@ -335,28 +363,43 @@ def home():
     })
 
 
-def init_model():
-    global analyzer
+def init_models():
+    global jawbone_analyzer, trailcam_analyzer
 
     try:
-        model_path = download_model()
+        print("Initializing models...")
 
-        if not model_path:
-            print("Could not download or find model file")
+        # Load jawbone model
+        jawbone_path = download_model('jawbone')
+        if jawbone_path:
+            jawbone_analyzer = DeerAnalyzer(jawbone_path, 'jawbone')
+            print("Jawbone model loaded successfully!")
+        else:
+            print("Failed to load jawbone model")
+
+        # Load trailcam model
+        trailcam_path = download_model('trailcam')
+        if trailcam_path:
+            trailcam_analyzer = DeerAnalyzer(trailcam_path, 'trailcam')
+            print("Trail camera model loaded successfully!")
+        else:
+            print("Failed to load trail camera model")
+
+        if jawbone_analyzer is None and trailcam_analyzer is None:
+            print("Failed to load any models")
             return False
 
-        analyzer = JawboneAnalyzer(model_path)
-        print("Model loaded successfully!")
+        print("Model initialization complete!")
         return True
 
     except Exception as e:
-        print(f"Failed to initialize model: {e}")
+        print(f"Failed to initialize models: {e}")
         traceback.print_exc()
         return False
 
 
-print("Starting Jawbone Analysis API...")
-init_model()
+print("Starting Deer Age Analysis API...")
+init_models()
 print("API ready!")
 
 if __name__ == '__main__':
