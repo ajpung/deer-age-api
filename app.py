@@ -97,7 +97,7 @@ class DeerAnalyzer:
         else:
             # Old format or different structure - try common alternatives
             self.architectures = self.checkpoint.get('architectures',
-                                                     self.checkpoint.get('model_architectures', ['resnet18'] * 5))
+                                                     self.checkpoint.get('model_architectures', ['resnet50'] * 5))
             self.num_classes = self.checkpoint.get('num_classes', self.checkpoint.get('n_classes', 10))
             self.input_size = self.checkpoint.get('input_size', [224, 224])
             self.label_mapping = self.checkpoint.get('label_mapping', self.checkpoint.get('class_mapping', {}))
@@ -109,7 +109,7 @@ class DeerAnalyzer:
             # Handle single model case
             if 'state_dict' in self.checkpoint and not self.state_dicts:
                 self.state_dicts = [self.checkpoint['state_dict']]
-                self.architectures = ['resnet18']
+                self.architectures = ['resnet50']
                 self.cv_scores = [95.0]
 
             # If still missing critical info, use trail camera defaults
@@ -126,9 +126,9 @@ class DeerAnalyzer:
             if not isinstance(self.cv_scores, list):
                 self.cv_scores = [self.cv_scores]
 
-            # Ensure we have 5 ResNet-18 models for trail camera
+            # Ensure we have 5 ResNet-50 models for trail camera
             if self.model_name == 'trailcam' and len(self.architectures) == 1:
-                self.architectures = ['resnet18'] * len(self.state_dicts)
+                self.architectures = ['resnet50'] * len(self.state_dicts)
 
             print(f"Using fallback structure: {len(self.state_dicts)} models, architectures: {self.architectures}")
 
