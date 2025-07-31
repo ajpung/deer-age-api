@@ -5,6 +5,9 @@ __pycache__/
 
 # ML model files
 *.pth
+*.png
+*.jpg
+*.jpeg
 
 # C extensions
 *.so
