@@ -103,12 +103,6 @@
             transform: scale(1.02);
         }
 
-        .drop-zone-icon {
-            font-size: 4rem;
-            margin-bottom: 1rem;
-            color: #2d4a2d;
-        }
-
         .drop-zone h3 {
             font-size: 1.5rem;
             margin-bottom: 0.5rem;
@@ -524,8 +518,8 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>DeerAge<span style="color: #daa520;">AI</span> Crop Tool</h1>
-            <p>Upload and crop your deer images for AI analysis</p>
+            <p style="font-size: 60px;">Age<span style="color: #daa520;">My</span>Deer</p>
+            <p style="font-size: 30px;">Upload and crop your images for AI analysis</p>
         </div>
 
         <!-- Model Selection -->
@@ -533,17 +527,16 @@
             <h2>Select Analysis Type</h2>
             <div class="model-buttons">
                 <button class="model-btn" data-model="trailcam">
-                    📷 Trail Camera (1:1 Square)
+                    Trail Camera (1:1 Square)
                 </button>
                 <button class="model-btn" data-model="jawbone">
-                    🦴 Jawbone (2:1 Wide Rectangle)
+                  Jawbone (2:1 Wide Rectangle)
                 </button>
             </div>
         </div>
 
         <!-- Drop Zone -->
         <div class="drop-zone" id="dropZone">
-            <div class="drop-zone-icon">📁</div>
             <h3>Drag & Drop Your Image Here</h3>
             <p>or click to browse files</p>
             <button class="upload-btn" onclick="document.getElementById('fileInput').click()">
@@ -1135,11 +1128,6 @@
                 return;
             }
 
-            if (selectedModel !== 'jawbone') {
-                alert('AI analysis is currently only available for jawbone images!');
-                return;
-            }
-
             console.log('Starting analysis...');
 
             // Show loading
@@ -1153,222 +1141,41 @@
                 // Get heatmap preference
                 const includeHeatmap = document.getElementById('includeHeatmap').checked;
                 console.log('Include heatmap:', includeHeatmap);
+                console.log('Selected model:', selectedModel);
 
-                // FIXED: Use proper two-step cropping to preserve accuracy
-                const cropImage = document.getElementById('cropImage');
+                // Get the cropped image
+                const croppedImageData = await getCroppedImageData();
+                console.log('Image processed, base64 length:', croppedImageData.length);
 
-                // Force a reflow to ensure dimensions are calculated
-                cropImage.offsetHeight; // Force reflow
-
-                console.log('Crop data:', cropData);
-
-                // Get image dimensions - use multiple methods for reliability
-                const rect = cropImage.getBoundingClientRect();
-                const displayWidth = cropImage.offsetWidth || cropImage.clientWidth || rect.width || cropImage.width;
-                const displayHeight = cropImage.offsetHeight || cropImage.clientHeight || rect.height || cropImage.height;
-                const naturalWidth = cropImage.naturalWidth;
-                const naturalHeight = cropImage.naturalHeight;
-
-                console.log('All dimension methods:', {
-                    offsetWidth: cropImage.offsetWidth,
-                    offsetHeight: cropImage.offsetHeight,
-                    clientWidth: cropImage.clientWidth,
-                    clientHeight: cropImage.clientHeight,
-                    boundingRect: rect,
-                    width: cropImage.width,
-                    height: cropImage.height,
-                    naturalWidth: naturalWidth,
-                    naturalHeight: naturalHeight,
-                    style: {
-                        width: cropImage.style.width,
-                        height: cropImage.style.height,
-                        display: cropImage.style.display
-                    }
+                // Send to Flask API
+                const response = await fetch('https://deer-age-api-production.up.railway.app/analyze', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        image: croppedImageData,
+                        model_type: selectedModel,
+                        include_heatmap: includeHeatmap
+                    })
                 });
 
-                console.log('Final selected dimensions:', {
-                    display: { width: displayWidth, height: displayHeight },
-                    natural: { width: naturalWidth, height: naturalHeight }
-                });
+                console.log('API Response status:', response.status);
 
-                // Validate image dimensions
-                if (!naturalWidth || !naturalHeight) {
-                    throw new Error('Image not properly loaded. Natural dimensions are 0.');
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
                 }
 
-                // If display dimensions are still 0, use a fallback approach
-                let finalDisplayWidth = displayWidth;
-                let finalDisplayHeight = displayHeight;
+                const result = await response.json();
+                console.log('API Result:', result);
 
-                if (!displayWidth || !displayHeight) {
-                    console.log('Display dimensions are 0, trying fallback approach...');
-
-                    // Fallback: Get the container dimensions or use natural dimensions
-                    const container = cropImage.parentElement;
-                    const containerRect = container ? container.getBoundingClientRect() : null;
-
-                    console.log('Container dimensions:', containerRect);
-
-                    // If we still can't get display dimensions, calculate them based on max-width/max-height
-                    const maxWidth = 500; // From your CSS
-                    const maxHeight = 500; // From your CSS
-
-                    const aspectRatio = naturalWidth / naturalHeight;
-
-                    if (aspectRatio > 1) {
-                        // Wider than tall
-                        finalDisplayWidth = Math.min(naturalWidth, maxWidth);
-                        finalDisplayHeight = finalDisplayWidth / aspectRatio;
-                    } else {
-                        // Taller than wide
-                        finalDisplayHeight = Math.min(naturalHeight, maxHeight);
-                        finalDisplayWidth = finalDisplayHeight * aspectRatio;
-                    }
-
-                    console.log('Calculated display dimensions:', {
-                        width: finalDisplayWidth,
-                        height: finalDisplayHeight
-                    });
+                if (result.success) {
+                    // Show results with side-by-side images
+                    showAnalysisResults(result, croppedImageData);
+                } else {
+                    alert(`Analysis failed: ${result.error || 'Unknown error'}`);
                 }
-
-                if (!finalDisplayWidth || !finalDisplayHeight) {
-                    throw new Error(`Still unable to determine display dimensions. Natural: ${naturalWidth}x${naturalHeight}, Display: ${finalDisplayWidth}x${finalDisplayHeight}`);
-                }
-
-                // Validate crop data
-                if (!cropData || cropData.width <= 0 || cropData.height <= 0) {
-                    throw new Error('Invalid crop area. Please make sure you have drawn a crop rectangle.');
-                }
-
-                // Calculate scale factors between displayed image and actual image
-                const scaleX = naturalWidth / finalDisplayWidth;
-                const scaleY = naturalHeight / finalDisplayHeight;
-
-                console.log('Scale factors:', { scaleX, scaleY });
-
-                const actualCropX = Math.max(0, cropData.x * scaleX);
-                const actualCropY = Math.max(0, cropData.y * scaleY);
-                const actualCropWidth = Math.max(1, cropData.width * scaleX);
-                const actualCropHeight = Math.max(1, cropData.height * scaleY);
-
-                // Ensure crop doesn't exceed image bounds
-                const maxWidth = naturalWidth - actualCropX;
-                const maxHeight = naturalHeight - actualCropY;
-
-                const finalCropWidth = Math.min(actualCropWidth, maxWidth);
-                const finalCropHeight = Math.min(actualCropHeight, maxHeight);
-
-                console.log('Final crop coordinates:', {
-                    x: actualCropX, y: actualCropY,
-                    width: finalCropWidth, height: finalCropHeight
-                });
-
-                // Validate final crop dimensions
-                if (finalCropWidth <= 0 || finalCropHeight <= 0) {
-                    throw new Error('Invalid crop dimensions after scaling. Crop area is too small or outside image bounds.');
-                }
-
-                // Step 1: Extract crop at original dimensions
-                const tempCanvas = document.createElement('canvas');
-                const tempCtx = tempCanvas.getContext('2d');
-
-                tempCanvas.width = finalCropWidth;
-                tempCanvas.height = finalCropHeight;
-
-                console.log('Temp canvas dimensions:', { width: tempCanvas.width, height: tempCanvas.height });
-
-                // Create image and extract the crop
-                const img = new Image();
-                img.onload = async () => {
-                    try {
-                        console.log('Image loaded, starting crop process');
-
-                        // Validate image loaded properly
-                        if (!img.naturalWidth || !img.naturalHeight) {
-                            throw new Error('Loaded image has invalid dimensions');
-                        }
-
-                        // Clear temp canvas
-                        tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
-
-                        // Draw the cropped region at original size
-                        tempCtx.drawImage(
-                            img,
-                            actualCropX, actualCropY, finalCropWidth, finalCropHeight,
-                            0, 0, finalCropWidth, finalCropHeight
-                        );
-
-                        // Step 2: Scale to 448x224 for the model
-                        const modelCanvas = document.createElement('canvas');
-                        const modelCtx = modelCanvas.getContext('2d');
-
-                        modelCanvas.width = 448;
-                        modelCanvas.height = 224;
-
-                        console.log('Model canvas dimensions:', { width: modelCanvas.width, height: modelCanvas.height });
-
-                        // Improve rendering quality
-                        modelCtx.imageSmoothingEnabled = true;
-                        modelCtx.imageSmoothingQuality = 'high';
-
-                        // Clear model canvas
-                        modelCtx.clearRect(0, 0, 448, 224);
-
-                        // Draw the cropped image scaled to model requirements
-                        modelCtx.drawImage(tempCanvas, 0, 0, 448, 224);
-
-                        // Convert to base64
-                        const base64Data = modelCanvas.toDataURL('image/jpeg', 0.95);
-                        console.log('Image processed, base64 length:', base64Data.length);
-
-                        // Send to Flask API
-                        const response = await fetch('https://deer-age-api-production.up.railway.app/analyze', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify({
-                                image: base64Data,
-                                include_heatmap: includeHeatmap
-                            })
-                        });
-
-                        console.log('API Response status:', response.status);
-
-                        if (!response.ok) {
-                            const errorText = await response.text();
-                            throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
-                        }
-
-                        const result = await response.json();
-                        console.log('API Result:', result);
-
-                        if (result.success) {
-                            // Show results with side-by-side images
-                            showAnalysisResults(result, base64Data);
-                        } else {
-                            alert(`Analysis failed: ${result.error || 'Unknown error'}`);
-                        }
-
-                    } catch (imgError) {
-                        console.error('Error in image processing:', imgError);
-                        alert('Error processing image: ' + imgError.message);
-                    } finally {
-                        document.getElementById('loading').style.display = 'none';
-                        document.getElementById('cropInterface').style.display = 'block';
-                    }
-                };
-
-                img.onerror = () => {
-                    console.error('Failed to load image');
-                    alert('Failed to load image for processing');
-                    document.getElementById('loading').style.display = 'none';
-                    document.getElementById('cropInterface').style.display = 'block';
-                };
-
-                // Add crossOrigin for better compatibility
-                img.crossOrigin = 'anonymous';
-                img.src = uploadedImage;
 
             } catch (error) {
                 console.error('Analysis error:', error);
@@ -1378,8 +1185,108 @@
             }
         }
 
-        // Add this new function to display results with side-by-side images
+        async function getCroppedImageData() {
+            return new Promise((resolve, reject) => {
+                const cropImage = document.getElementById('cropImage');
+
+                // Force reflow
+                cropImage.offsetHeight;
+
+                // Get image dimensions with fallbacks
+                const rect = cropImage.getBoundingClientRect();
+                let displayWidth = cropImage.offsetWidth || cropImage.clientWidth || rect.width || cropImage.width;
+                let displayHeight = cropImage.offsetHeight || cropImage.clientHeight || rect.height || cropImage.height;
+                const naturalWidth = cropImage.naturalWidth;
+                const naturalHeight = cropImage.naturalHeight;
+
+                if (!naturalWidth || !naturalHeight) {
+                    reject(new Error('Image not properly loaded. Natural dimensions are 0.'));
+                    return;
+                }
+
+                // Fallback for display dimensions
+                if (!displayWidth || !displayHeight) {
+                    const maxWidth = 500;
+                    const maxHeight = 500;
+                    const aspectRatio = naturalWidth / naturalHeight;
+
+                    if (aspectRatio > 1) {
+                        displayWidth = Math.min(naturalWidth, maxWidth);
+                        displayHeight = displayWidth / aspectRatio;
+                    } else {
+                        displayHeight = Math.min(naturalHeight, maxHeight);
+                        displayWidth = displayHeight * aspectRatio;
+                    }
+                }
+
+                if (!displayWidth || !displayHeight) {
+                    reject(new Error('Unable to determine display dimensions'));
+                    return;
+                }
+
+                // Calculate scale factors
+                const scaleX = naturalWidth / displayWidth;
+                const scaleY = naturalHeight / displayHeight;
+
+                const actualCropX = Math.max(0, cropData.x * scaleX);
+                const actualCropY = Math.max(0, cropData.y * scaleY);
+                const actualCropWidth = Math.max(1, cropData.width * scaleX);
+                const actualCropHeight = Math.max(1, cropData.height * scaleY);
+
+                // Ensure crop doesn't exceed bounds
+                const maxWidth = naturalWidth - actualCropX;
+                const maxHeight = naturalHeight - actualCropY;
+                const finalCropWidth = Math.min(actualCropWidth, maxWidth);
+                const finalCropHeight = Math.min(actualCropHeight, maxHeight);
+
+                if (finalCropWidth <= 0 || finalCropHeight <= 0) {
+                    reject(new Error('Invalid crop dimensions'));
+                    return;
+                }
+
+                // Set target dimensions based on model
+                const targetWidth = selectedModel === 'trailcam' ? 224 : 448;
+                const targetHeight = 224;
+
+                // Create canvas for cropping
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                canvas.width = targetWidth;
+                canvas.height = targetHeight;
+
+                const img = new Image();
+                img.onload = () => {
+                    try {
+                        ctx.imageSmoothingEnabled = true;
+                        ctx.imageSmoothingQuality = 'high';
+                        ctx.clearRect(0, 0, targetWidth, targetHeight);
+
+                        ctx.drawImage(
+                            img,
+                            actualCropX, actualCropY, finalCropWidth, finalCropHeight,
+                            0, 0, targetWidth, targetHeight
+                        );
+
+                        const base64Data = canvas.toDataURL('image/jpeg', 0.95);
+                        resolve(base64Data);
+                    } catch (error) {
+                        reject(error);
+                    }
+                };
+
+                img.onerror = () => reject(new Error('Failed to load image'));
+                img.crossOrigin = 'anonymous';
+                img.src = uploadedImage;
+            });
+        }
+
         function showAnalysisResults(result, originalCroppedImage) {
+            const modelName = selectedModel === 'trailcam' ? 'Trail Camera' : 'Jawbone';
+
+            // Remove any existing results first
+            const existingResults = document.querySelectorAll('.results-section');
+            existingResults.forEach(section => section.remove());
+
             let heatmapSection = '';
 
             // Only show heatmap section if heatmap was generated
@@ -1389,14 +1296,14 @@
                         <h3>AI Focus Analysis</h3>
                         <div class="image-pair">
                             <div class="image-container">
-                                <h4>Original Jawbone</h4>
-                                <img src="${originalCroppedImage}" class="comparison-image" alt="Original Cropped Jawbone">
+                                <h4>Original ${modelName}</h4>
+                                <img src="${originalCroppedImage}" class="comparison-image" alt="Original Cropped Image">
                             </div>
 
                             <div class="image-container">
                                 <h4>AI Attention Areas</h4>
                                 <div style="position: relative; display: inline-block;">
-                                    <img src="${originalCroppedImage}" class="comparison-image" alt="Original Jawbone Background" style="display: block;">
+                                    <img src="${originalCroppedImage}" class="comparison-image" alt="Original Image Background" style="display: block;">
                                     <img src="data:image/png;base64,${result.heatmap_base64}" class="comparison-image" alt="AI Attention Heatmap" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0.7; mix-blend-mode: multiply;">
                                 </div>
                                 <p style="font-size: 0.9em; color: #666; margin-top: 8px;">Red areas = high attention</p>
@@ -1406,16 +1313,19 @@
                 `;
             }
 
+            // Format age display - only add + for 5.5 or higher
+            const ageDisplay = result.age >= 5.5 ? `${result.age}+` : `${result.age}`;
+
             const resultsHtml = `
                 <div class="results-section">
                     <div class="results-header">
-                        <h2>🦴 Jawbone Analysis Results</h2>
+                        <h2>${modelName} Analysis Results</h2>
                     </div>
 
                     <div class="results-grid">
                         <div class="result-card age-card">
                             <div class="result-label">Estimated Age</div>
-                            <div class="age-value">${result.age}+ years</div>
+                            <div class="age-value">${ageDisplay} years</div>
                         </div>
 
                         <div class="result-card confidence-card">
@@ -1437,6 +1347,10 @@
             // Insert results after the crop interface
             const cropInterface = document.getElementById('cropInterface');
             cropInterface.insertAdjacentHTML('afterend', resultsHtml);
+
+            // Hide loading and show results
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('cropInterface').style.display = 'block';
 
             // Scroll to results
             setTimeout(() => {
