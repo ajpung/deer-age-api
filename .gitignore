@@ -9,6 +9,9 @@ __pycache__/
 *.jpg
 *.jpeg
 
+# Environments
+buck-env/
+
 # C extensions
 *.so
 

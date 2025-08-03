@@ -114,8 +114,8 @@ class DeerAnalyzer:
 
             # If still missing critical info, use trail camera defaults
             if not self.label_mapping:
-                # Create default mapping for trail camera (assuming classes 0-9 for ages 1-10)
-                self.label_mapping = {str(i + 1): i for i in range(self.num_classes)}
+                # Correct mapping based on training code: ages [1.5, 2.5, 3.5, 4.5, 5.5] -> indices [0, 1, 2, 3, 4]
+                self.label_mapping = {"1.5": 0, "2.5": 1, "3.5": 2, "4.5": 3, "5.5": 4}
 
             if not isinstance(self.state_dicts, list):
                 self.state_dicts = [self.state_dicts]
@@ -176,15 +176,13 @@ class DeerAnalyzer:
                 raise
 
         if len(self.models) > 1:
-            print(f"Reducing from {len(self.models)} to 1 best model for maximum speed...")
-
-            best_index = np.argmax(self.cv_scores)
-
-            self.models = [self.models[best_index]]
-            self.architectures = [self.architectures[best_index]]
-            self.cv_scores = [self.cv_scores[best_index]]
-
-            print(f"Using single best model with CV score: {self.cv_scores[0]:.1f}%")
+            print(f"Keeping all {len(self.models)} models for ensemble prediction...")
+            # Comment out the reduction for testing
+            # best_index = np.argmax(self.cv_scores)
+            # self.models = [self.models[best_index]]
+            # self.architectures = [self.architectures[best_index]]
+            # self.cv_scores = [self.cv_scores[best_index]]
+            # print(f"Using single best model with CV score: {self.cv_scores[0]:.1f}%")
 
     def preprocess_image(self, image_data):
         try:

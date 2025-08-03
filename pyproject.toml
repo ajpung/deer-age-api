@@ -1,0 +1,89 @@
+[project]
+name = "buck"
+dynamic = ["version"]
+description = "Tool for estimating deer age from trail cam images"
+readme = "README.md"
+requires-python = ">=3.9,<3.13"
+authors = [
+    {name = "Aaron Pung", email = "aaron.pung@gmail.com"},
+]
+
+dependencies = [
+    "albumentations",
+    "black",
+    "black[jupyter]",
+    "catboost",
+    "ipykernel",
+    "jupyter",
+    "jupyter_client",
+    "keras",
+    "lime",
+    "lightgbm",
+    "matplotlib",
+    "mypy",
+    "notebook",
+    "numpy",
+    "opencv-python",
+    "pandas",
+    "python-dateutil",
+    "pyzmq",
+    "scikit-learn",
+    "shap",
+    "seaborn",
+    "setuptools",
+    "setuptools-scm",
+    "tensorflow",
+    "timm",
+    "xgboost",
+    "wheel",
+]
+
+[project.optional-dependencies]
+dev = [
+    "black",
+    "jupyter_client",
+    "kaleido",
+    "mypy",
+    "pytest",
+]
+docs = [
+    "autodoc_pydantic",
+    "furo",
+    "myst_parser",
+    "sphinx",
+    "sphinx_rtd_theme",
+]
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+plugins = "numpy.typing.mypy_plugin"
+
+[tool.setuptools_scm]
+
+[tool.semantic_release]
+tag_format = "{version}"
+
+[tool.black]
+line-length = 88
+target-version = ['py312']
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+  | env
+  | venv
+  | buck-env
+)/
+'''
