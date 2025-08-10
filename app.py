@@ -238,14 +238,14 @@ class DeerAnalyzer:
             overlay_pil.save(buffer, format='PNG')
             heatmap_base64 = base64.b64encode(buffer.getvalue()).decode()
 
-            return heatmap_base64 
+            return heatmap_base64
 
         except Exception as e:
             print(f"Heatmap generation error: {e}")
             return None
 
     def create_processed_heatmap_overlay(self, original_image, heatmap):
-        """Apply your sophisticated overlay technique"""
+        """Apply overlay technique based on working local script"""
         # Apply threshold - values < 0.001 become transparent
         heatmap_thresh = np.copy(heatmap)
         heatmap_thresh[heatmap_thresh < 0.001] = 0
@@ -255,30 +255,32 @@ class DeerAnalyzer:
             heatmap_thresh = heatmap_thresh / heatmap_thresh.max()
 
         # Apply jet colormap
-        heatmap_colored = cm.jet(heatmap_thresh)[:, :, :3]
-        heatmap_colored_rgb = (heatmap_colored * 255).astype(np.uint8)
+        heatmap_colored = cm.jet(heatmap_thresh)
+        heatmap_colored_rgb = (heatmap_colored[:, :, :3] * 255).astype(np.uint8)
 
         # Create alpha channel from thresholded values
         alpha_channel = heatmap_thresh.copy()
         alpha_channel = (alpha_channel * 255).astype(np.uint8)
 
-        # Apply contrast adjustment (-50)
-        original_contrast = self.apply_brightness_contrast(original_image, 0, -50)
+        # Apply contrast adjustment (-50) to original image
+        adjusted_original = self.apply_brightness_contrast(original_image, 0, -50)
 
-        # Overlay blend with transparency
-        overlay = original_contrast.copy().astype(np.float32)
+        # Create overlay using proper alpha blending
+        overlay = adjusted_original.copy().astype(np.float32)
         mask = alpha_channel > 0
+
         if np.any(mask):
             alpha_norm = alpha_channel[mask].astype(np.float32) / 255.0
             base = overlay[mask] / 255.0
             blend = heatmap_colored_rgb[mask].astype(np.float32) / 255.0
 
-            # Overlay blend formula
+            # Overlay blend mode (like Photoshop)
             overlay_blend = np.zeros_like(base)
             dark_mask = base <= 0.5
             overlay_blend[dark_mask] = 2 * base[dark_mask] * blend[dark_mask]
             overlay_blend[~dark_mask] = 1 - 2 * (1 - base[~dark_mask]) * (1 - blend[~dark_mask])
 
+            # Combine original and overlay using alpha
             overlay[mask] = (base * (1 - alpha_norm[:, np.newaxis]) +
                              overlay_blend * alpha_norm[:, np.newaxis]) * 255
 
