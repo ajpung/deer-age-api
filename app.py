@@ -254,9 +254,14 @@ class DeerAnalyzer:
         if heatmap_thresh.max() > 0:
             heatmap_thresh = heatmap_thresh / heatmap_thresh.max()
 
-        # Apply jet colormap
-        heatmap_colored = cm.jet(heatmap_thresh)
-        heatmap_colored_rgb = (heatmap_colored[:, :, :3] * 255).astype(np.uint8)
+        # Apply jet colormap with error handling
+        try:
+            heatmap_colored = cm.jet(heatmap_thresh)
+            heatmap_colored_rgb = (heatmap_colored[:, :, :3] * 255).astype(np.uint8)
+        except Exception as e:
+            print(f"Colormap error: {e}")
+            # Fallback to grayscale
+            heatmap_colored_rgb = np.stack([heatmap_thresh * 255] * 3, axis=-1).astype(np.uint8)
 
         # Create alpha channel from thresholded values
         alpha_channel = heatmap_thresh.copy()
