@@ -230,8 +230,8 @@ class DeerAnalyzer:
                 heatmap = np.exp(-((x - center_x) ** 2 + (y - center_y) ** 2) / (min(h, w) / 3) ** 2)
                 heatmap = heatmap / heatmap.max()
 
-            heatmap_colored = cm.jet(heatmap)[:, :, :3]
-            overlay = (original_image * 0.6 + heatmap_colored * 0.4 * 255).astype(np.uint8)
+            # Apply your sophisticated technique
+            overlay = self.create_processed_heatmap_overlay(original_image, heatmap)
 
             overlay_pil = Image.fromarray(overlay)
             buffer = io.BytesIO()
@@ -243,6 +243,67 @@ class DeerAnalyzer:
         except Exception as e:
             print(f"Heatmap generation error: {e}")
             return None
+
+    def create_processed_heatmap_overlay(self, original_image, heatmap):
+        """Apply your sophisticated overlay technique"""
+        # Apply threshold - values < 0.001 become transparent
+        heatmap_thresh = np.copy(heatmap)
+        heatmap_thresh[heatmap_thresh < 0.001] = 0
+
+        # Normalize
+        if heatmap_thresh.max() > 0:
+            heatmap_thresh = heatmap_thresh / heatmap_thresh.max()
+
+        # Apply jet colormap
+        heatmap_colored = cm.jet(heatmap_thresh)[:, :, :3]
+        heatmap_colored_rgb = (heatmap_colored * 255).astype(np.uint8)
+
+        # Create alpha channel from thresholded values
+        alpha_channel = heatmap_thresh.copy()
+        alpha_channel = (alpha_channel * 255).astype(np.uint8)
+
+        # Apply contrast adjustment (-50)
+        original_contrast = self.apply_brightness_contrast(original_image, 0, -50)
+
+        # Overlay blend with transparency
+        overlay = original_contrast.copy().astype(np.float32)
+        mask = alpha_channel > 0
+        if np.any(mask):
+            alpha_norm = alpha_channel[mask].astype(np.float32) / 255.0
+            base = overlay[mask] / 255.0
+            blend = heatmap_colored_rgb[mask].astype(np.float32) / 255.0
+
+            # Overlay blend formula
+            overlay_blend = np.zeros_like(base)
+            dark_mask = base <= 0.5
+            overlay_blend[dark_mask] = 2 * base[dark_mask] * blend[dark_mask]
+            overlay_blend[~dark_mask] = 1 - 2 * (1 - base[~dark_mask]) * (1 - blend[~dark_mask])
+
+            overlay[mask] = (base * (1 - alpha_norm[:, np.newaxis]) +
+                             overlay_blend * alpha_norm[:, np.newaxis]) * 255
+
+        return np.clip(overlay, 0, 255).astype(np.uint8)
+
+    def apply_brightness_contrast(self, image, brightness=0, contrast=0):
+        """Apply brightness and contrast adjustments"""
+        if brightness != 0:
+            if brightness > 0:
+                shadow = brightness
+                highlight = 255
+            else:
+                shadow = 0
+                highlight = 255 + brightness
+            alpha_b = (highlight - shadow) / 255
+            gamma_b = shadow
+            image = cv2.addWeighted(image, alpha_b, image, 0, gamma_b)
+
+        if contrast != 0:
+            f = 131 * (contrast + 127) / (127 * (131 - contrast))
+            alpha_c = f
+            gamma_c = 127 * (1 - f)
+            image = cv2.addWeighted(image, alpha_c, image, 0, gamma_c)
+
+        return np.clip(image, 0, 255).astype(np.uint8)
 
     def analyze_image(self, image_data, include_heatmap=False):
         try:
