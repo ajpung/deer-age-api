@@ -238,7 +238,7 @@ class DeerAnalyzer:
             overlay_pil.save(buffer, format='PNG')
             heatmap_base64 = base64.b64encode(buffer.getvalue()).decode()
 
-            return heatmap_base64
+            return heatmap_base64 
 
         except Exception as e:
             print(f"Heatmap generation error: {e}")
