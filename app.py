@@ -200,6 +200,10 @@ class DeerAnalyzer:
 
             img_resized = cv2.resize(img, (self.input_size[1], self.input_size[0]))
 
+            # Keep original_image in 0-255 range for heatmap overlay
+            original_image = img_resized.copy()
+
+            # Only normalize for the tensor
             if img_resized.max() > 1.0:
                 img_resized = img_resized / 255.0
 
@@ -209,7 +213,7 @@ class DeerAnalyzer:
             std = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
             img_normalized = (img_tensor - mean) / std
 
-            return img_normalized.unsqueeze(0), img_resized
+            return img_normalized.unsqueeze(0), original_image
 
         except Exception as e:
             print(f"Preprocessing error: {e}")
