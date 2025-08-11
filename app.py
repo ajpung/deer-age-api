@@ -348,26 +348,17 @@ class DeerAnalyzer:
             rating_mapping = {v: k for k, v in self.label_mapping.items()}
             predicted_age = rating_mapping[predicted_class]
 
-            raw_heatmap = None
+            heatmap_base64 = None
             if include_heatmap:
-                raw_heatmap = self.generate_raw_heatmap(input_tensor, predicted_class)
+                heatmap_base64 = self.generate_heatmap(input_tensor, predicted_class, original_image)
 
             return {
                 'success': True,
                 'age': float(predicted_age),
                 'confidence': float(confidence),
-                'heatmap_array': raw_heatmap.tolist() if raw_heatmap is not None else None,
+                'heatmap_base64': heatmap_base64,  # Back to base64
                 'all_probabilities': probabilities.tolist()
             }
-
-        except Exception as e:
-            print(f"Analysis error: {e}")
-            traceback.print_exc()
-            return {
-                'success': False,
-                'error': str(e)
-            }
-
 
 jawbone_analyzer = None
 trailcam_analyzer = None
