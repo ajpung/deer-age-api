@@ -177,12 +177,6 @@ class DeerAnalyzer:
 
         if len(self.models) > 1:
             print(f"Keeping all {len(self.models)} models for ensemble prediction...")
-            # Comment out the reduction for testing
-            # best_index = np.argmax(self.cv_scores)
-            # self.models = [self.models[best_index]]
-            # self.architectures = [self.architectures[best_index]]
-            # self.cv_scores = [self.cv_scores[best_index]]
-            # print(f"Using single best model with CV score: {self.cv_scores[0]:.1f}%")
 
     def preprocess_image(self, image_data):
         try:
@@ -218,6 +212,26 @@ class DeerAnalyzer:
         except Exception as e:
             print(f"Preprocessing error: {e}")
             raise
+
+    def generate_raw_heatmap(self, input_tensor, predicted_class):
+        try:
+            best_model_idx = np.argmax(self.cv_scores)
+            best_model = self.models[best_model_idx]
+
+            grad_cam = GradCAM(best_model)
+            heatmap = grad_cam.generate_cam(input_tensor, predicted_class)
+
+            if heatmap is None:
+                h, w = self.input_size[0], self.input_size[1]
+                y, x = np.ogrid[:h, :w]
+                center_y, center_x = h // 2, w // 2
+                heatmap = np.exp(-((x - center_x) ** 2 + (y - center_y) ** 2) / (min(h, w) / 3) ** 2)
+                heatmap = heatmap / heatmap.max()
+
+            return heatmap
+        except Exception as e:
+            print(f"Raw heatmap error: {e}")
+            return None
 
     def generate_heatmap(self, input_tensor, predicted_class, original_image):
         try:
@@ -334,15 +348,15 @@ class DeerAnalyzer:
             rating_mapping = {v: k for k, v in self.label_mapping.items()}
             predicted_age = rating_mapping[predicted_class]
 
-            heatmap_base64 = None
+            raw_heatmap = None
             if include_heatmap:
-                heatmap_base64 = self.generate_heatmap(input_tensor, predicted_class, original_image)
+                raw_heatmap = self.generate_raw_heatmap(input_tensor, predicted_class)
 
             return {
                 'success': True,
                 'age': float(predicted_age),
                 'confidence': float(confidence),
-                'heatmap_base64': heatmap_base64,
+                'heatmap_array': raw_heatmap.tolist() if raw_heatmap is not None else None,
                 'all_probabilities': probabilities.tolist()
             }
 
