@@ -42,23 +42,36 @@ class GradCAM:
 
     def generate_cam(self, input_tensor, class_idx):
         if self.target_layer is None:
+            print(f"DEBUG GradCAM: target_layer is None")
             return None
 
         try:
+            print(f"DEBUG GradCAM: Starting with input_tensor.shape = {input_tensor.shape}")
+            print(f"DEBUG GradCAM: class_idx = {class_idx}")
+
             self.model.eval()
             output = self.model(input_tensor)
+            print(f"DEBUG GradCAM: model output.shape = {output.shape}")
 
             self.model.zero_grad()
             output[0, class_idx].backward(retain_graph=True)
+            print(f"DEBUG GradCAM: Backward pass completed")
 
             if self.gradients is None or self.activations is None:
+                print(f"DEBUG GradCAM: gradients or activations is None")
+                print(f"DEBUG GradCAM: gradients = {self.gradients}")
+                print(f"DEBUG GradCAM: activations = {self.activations}")
                 return None
 
             gradients = self.gradients.cpu().data.numpy()[0]
             activations = self.activations.cpu().data.numpy()[0]
+            print(f"DEBUG GradCAM: gradients.shape = {gradients.shape}")
+            print(f"DEBUG GradCAM: activations.shape = {activations.shape}")
 
             weights = np.mean(gradients, axis=(1, 2))
             cam = np.zeros(activations.shape[1:], dtype=np.float32)
+            print(f"DEBUG GradCAM: weights.shape = {weights.shape}")
+            print(f"DEBUG GradCAM: cam.shape = {cam.shape}")
 
             for i, w in enumerate(weights):
                 cam += w * activations[i]
@@ -68,11 +81,15 @@ class GradCAM:
                 cam = cam / cam.max()
 
             input_height, input_width = input_tensor.shape[2], input_tensor.shape[3]
+            print(f"DEBUG GradCAM: Resizing cam from {cam.shape} to ({input_width}, {input_height})")
             cam = cv2.resize(cam, (input_width, input_height))
+            print(f"DEBUG GradCAM: Final cam.shape = {cam.shape}")
 
             return cam
         except Exception as e:
             print(f"GradCAM error: {e}")
+            import traceback
+            traceback.print_exc()
             return None
 
 
