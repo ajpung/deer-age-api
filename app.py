@@ -230,11 +230,20 @@ class DeerAnalyzer:
 
     def generate_heatmap(self, input_tensor, predicted_class, original_image):
         try:
+            print(f"DEBUG {self.model_name}: generate_heatmap called")
+            print(f"DEBUG {self.model_name}: input_tensor.shape = {input_tensor.shape}")
+            print(f"DEBUG {self.model_name}: original_image.shape = {original_image.shape}")
+
             best_model_idx = np.argmax(self.cv_scores)
             best_model = self.models[best_model_idx]
 
             grad_cam = GradCAM(best_model)
             heatmap = grad_cam.generate_cam(input_tensor, predicted_class)
+
+            if heatmap is not None:
+                print(f"DEBUG {self.model_name}: generated heatmap.shape = {heatmap.shape}")
+            else:
+                print(f"DEBUG {self.model_name}: GradCAM failed, using fallback")
 
             if heatmap is None:
                 h, w = original_image.shape[:2]
@@ -242,9 +251,14 @@ class DeerAnalyzer:
                 center_y, center_x = h // 2, w // 2
                 heatmap = np.exp(-((x - center_x) ** 2 + (y - center_y) ** 2) / (min(h, w) / 3) ** 2)
                 heatmap = heatmap / heatmap.max()
+                print(f"DEBUG {self.model_name}: fallback heatmap.shape = {heatmap.shape}")
+
+            print(f"DEBUG {self.model_name}: final heatmap.shape = {heatmap.shape}")
+            print(f"DEBUG {self.model_name}: original_image.shape before overlay = {original_image.shape}")
 
             # Apply your sophisticated technique
             overlay = self.create_processed_heatmap_overlay(original_image, heatmap)
+            print(f"DEBUG {self.model_name}: overlay.shape = {overlay.shape}")
 
             overlay_pil = Image.fromarray(overlay)
             buffer = io.BytesIO()
