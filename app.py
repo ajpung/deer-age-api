@@ -290,33 +290,47 @@ class DeerAnalyzer:
 
     def create_processed_heatmap_overlay(self, original_image, heatmap):
         """Apply overlay technique based on working local script"""
+        print(f"DEBUG {self.model_name}: create_processed_heatmap_overlay called")
+        print(f"DEBUG {self.model_name}: original_image.shape = {original_image.shape}")
+        print(f"DEBUG {self.model_name}: heatmap.shape = {heatmap.shape}")
+        print(f"DEBUG {self.model_name}: original_image min/max = {original_image.min()}/{original_image.max()}")
+        print(f"DEBUG {self.model_name}: heatmap min/max = {heatmap.min()}/{heatmap.max()}")
+
         # Apply threshold - values < 0.001 become transparent
         heatmap_thresh = np.copy(heatmap)
         heatmap_thresh[heatmap_thresh < 0.001] = 0
+        print(f"DEBUG {self.model_name}: After threshold, non-zero pixels = {np.count_nonzero(heatmap_thresh)}")
 
         # Normalize
         if heatmap_thresh.max() > 0:
             heatmap_thresh = heatmap_thresh / heatmap_thresh.max()
+        print(
+            f"DEBUG {self.model_name}: After normalize, heatmap_thresh min/max = {heatmap_thresh.min()}/{heatmap_thresh.max()}")
 
         # Apply jet colormap with error handling
         try:
             heatmap_colored = cm.jet(heatmap_thresh)
             heatmap_colored_rgb = (heatmap_colored[:, :, :3] * 255).astype(np.uint8)
+            print(f"DEBUG {self.model_name}: heatmap_colored_rgb.shape = {heatmap_colored_rgb.shape}")
         except Exception as e:
             print(f"Colormap error: {e}")
-            # Fallback to grayscale
             heatmap_colored_rgb = np.stack([heatmap_thresh * 255] * 3, axis=-1).astype(np.uint8)
 
         # Create alpha channel from thresholded values
         alpha_channel = heatmap_thresh.copy()
         alpha_channel = (alpha_channel * 255).astype(np.uint8)
+        print(f"DEBUG {self.model_name}: alpha_channel non-zero pixels = {np.count_nonzero(alpha_channel)}")
 
         # Apply contrast adjustment (-50) to original image
         adjusted_original = self.apply_brightness_contrast(original_image, 0, -50)
+        print(f"DEBUG {self.model_name}: adjusted_original.shape = {adjusted_original.shape}")
+        print(
+            f"DEBUG {self.model_name}: adjusted_original min/max = {adjusted_original.min()}/{adjusted_original.max()}")
 
         # Create overlay using proper alpha blending
         overlay = adjusted_original.copy().astype(np.float32)
         mask = alpha_channel > 0
+        print(f"DEBUG {self.model_name}: mask has {np.count_nonzero(mask)} True pixels out of {mask.size} total")
 
         if np.any(mask):
             alpha_norm = alpha_channel[mask].astype(np.float32) / 255.0
@@ -333,7 +347,11 @@ class DeerAnalyzer:
             overlay[mask] = (base * (1 - alpha_norm[:, np.newaxis]) +
                              overlay_blend * alpha_norm[:, np.newaxis]) * 255
 
-        return np.clip(overlay, 0, 255).astype(np.uint8)
+        final_overlay = np.clip(overlay, 0, 255).astype(np.uint8)
+        print(f"DEBUG {self.model_name}: final_overlay.shape = {final_overlay.shape}")
+        print(f"DEBUG {self.model_name}: final_overlay min/max = {final_overlay.min()}/{final_overlay.max()}")
+
+        return final_overlay
 
     def apply_brightness_contrast(self, image, brightness=0, contrast=0):
         """Apply brightness and contrast adjustments"""
