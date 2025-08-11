@@ -106,6 +106,15 @@ class DeerAnalyzer:
                                                                                                 'models', [])))
             self.cv_scores = self.checkpoint.get('cv_scores', self.checkpoint.get('scores', [95.0] * 5))
 
+            # Add this debugging right after input_size is set
+            print(f"DEBUG {model_name}: input_size = {self.input_size}")
+            print(f"DEBUG {model_name}: label_mapping = {self.label_mapping}")
+
+            # For trail camera, let's force the input size to be correct
+            if self.model_name == 'trailcam':
+                self.input_size = [224, 224]  # Force square for trail camera
+                print(f"DEBUG: Forced trailcam input_size to {self.input_size}")
+
             # Handle single model case
             if 'state_dict' in self.checkpoint and not self.state_dicts:
                 self.state_dicts = [self.checkpoint['state_dict']]
@@ -192,7 +201,11 @@ class DeerAnalyzer:
 
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
+            print(f"DEBUG {self.model_name}: Original image shape: {img.shape}")
+            print(f"DEBUG {self.model_name}: Resizing to: {self.input_size}")
+
             img_resized = cv2.resize(img, (self.input_size[1], self.input_size[0]))
+            print(f"DEBUG {self.model_name}: Resized image shape: {img_resized.shape}")
 
             # Keep original_image in 0-255 range for heatmap overlay
             original_image = img_resized.copy()
@@ -206,6 +219,8 @@ class DeerAnalyzer:
             mean = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
             std = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
             img_normalized = (img_tensor - mean) / std
+
+            print(f"DEBUG {self.model_name}: Input tensor shape: {img_normalized.shape}")
 
             return img_normalized.unsqueeze(0), original_image
 
