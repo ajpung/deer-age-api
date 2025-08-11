@@ -213,26 +213,6 @@ class DeerAnalyzer:
             print(f"Preprocessing error: {e}")
             raise
 
-    def generate_raw_heatmap(self, input_tensor, predicted_class):
-        try:
-            best_model_idx = np.argmax(self.cv_scores)
-            best_model = self.models[best_model_idx]
-
-            grad_cam = GradCAM(best_model)
-            heatmap = grad_cam.generate_cam(input_tensor, predicted_class)
-
-            if heatmap is None:
-                h, w = self.input_size[0], self.input_size[1]
-                y, x = np.ogrid[:h, :w]
-                center_y, center_x = h // 2, w // 2
-                heatmap = np.exp(-((x - center_x) ** 2 + (y - center_y) ** 2) / (min(h, w) / 3) ** 2)
-                heatmap = heatmap / heatmap.max()
-
-            return heatmap
-        except Exception as e:
-            print(f"Raw heatmap error: {e}")
-            return None
-
     def generate_heatmap(self, input_tensor, predicted_class, original_image):
         try:
             best_model_idx = np.argmax(self.cv_scores)
@@ -348,15 +328,15 @@ class DeerAnalyzer:
             rating_mapping = {v: k for k, v in self.label_mapping.items()}
             predicted_age = rating_mapping[predicted_class]
 
-            raw_heatmap = None
+            heatmap_base64 = None
             if include_heatmap:
-                raw_heatmap = self.generate_raw_heatmap(input_tensor, predicted_class)
+                heatmap_base64 = self.generate_heatmap(input_tensor, predicted_class, original_image)
 
             return {
                 'success': True,
                 'age': float(predicted_age),
                 'confidence': float(confidence),
-                'heatmap_array': raw_heatmap.tolist() if raw_heatmap is not None else None,
+                'heatmap_base64': heatmap_base64,
                 'all_probabilities': probabilities.tolist()
             }
 
