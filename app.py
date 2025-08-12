@@ -42,36 +42,22 @@ class GradCAM:
 
     def generate_cam(self, input_tensor, class_idx):
         if self.target_layer is None:
-            print(f"DEBUG GradCAM: target_layer is None")
             return None
 
         try:
-            print(f"DEBUG GradCAM: Starting with input_tensor.shape = {input_tensor.shape}")
-            print(f"DEBUG GradCAM: class_idx = {class_idx}")
-
             self.model.eval()
             output = self.model(input_tensor)
-            print(f"DEBUG GradCAM: model output.shape = {output.shape}")
-
             self.model.zero_grad()
             output[0, class_idx].backward(retain_graph=True)
-            print(f"DEBUG GradCAM: Backward pass completed")
 
             if self.gradients is None or self.activations is None:
-                print(f"DEBUG GradCAM: gradients or activations is None")
-                print(f"DEBUG GradCAM: gradients = {self.gradients}")
-                print(f"DEBUG GradCAM: activations = {self.activations}")
                 return None
 
             gradients = self.gradients.cpu().data.numpy()[0]
             activations = self.activations.cpu().data.numpy()[0]
-            print(f"DEBUG GradCAM: gradients.shape = {gradients.shape}")
-            print(f"DEBUG GradCAM: activations.shape = {activations.shape}")
 
             weights = np.mean(gradients, axis=(1, 2))
             cam = np.zeros(activations.shape[1:], dtype=np.float32)
-            print(f"DEBUG GradCAM: weights.shape = {weights.shape}")
-            print(f"DEBUG GradCAM: cam.shape = {cam.shape}")
 
             for i, w in enumerate(weights):
                 cam += w * activations[i]
@@ -81,15 +67,11 @@ class GradCAM:
                 cam = cam / cam.max()
 
             input_height, input_width = input_tensor.shape[2], input_tensor.shape[3]
-            print(f"DEBUG GradCAM: Resizing cam from {cam.shape} to ({input_width}, {input_height})")
             cam = cv2.resize(cam, (input_width, input_height))
-            print(f"DEBUG GradCAM: Final cam.shape = {cam.shape}")
 
             return cam
         except Exception as e:
             print(f"GradCAM error: {e}")
-            import traceback
-            traceback.print_exc()
             return None
 
 
@@ -99,12 +81,8 @@ class DeerAnalyzer:
         self.model_name = model_name
         self.checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
 
-        # Debug: print available keys
-        print(f"Available keys in {model_name} checkpoint: {list(self.checkpoint.keys())}")
-
         # Handle different checkpoint formats
         if 'architectures_used' in self.checkpoint:
-            # New format (jawbone)
             self.architectures = self.checkpoint['architectures_used']
             self.num_classes = self.checkpoint['num_classes']
             self.input_size = self.checkpoint['input_size']
@@ -112,51 +90,27 @@ class DeerAnalyzer:
             self.state_dicts = self.checkpoint['model_state_dicts']
             self.cv_scores = self.checkpoint['cv_scores']
         else:
-            # Old format or different structure - try common alternatives
-            self.architectures = self.checkpoint.get('architectures',
-                                                     self.checkpoint.get('model_architectures', ['resnet50'] * 5))
-            self.num_classes = self.checkpoint.get('num_classes', self.checkpoint.get('n_classes', 10))
+            self.architectures = self.checkpoint.get('architectures', ['resnet50'] * 5)
+            self.num_classes = self.checkpoint.get('num_classes', 10)
             self.input_size = self.checkpoint.get('input_size', [224, 224])
-            self.label_mapping = self.checkpoint.get('label_mapping', self.checkpoint.get('class_mapping', {}))
-            self.state_dicts = self.checkpoint.get('model_state_dicts', self.checkpoint.get('state_dicts',
-                                                                                            self.checkpoint.get(
-                                                                                                'models', [])))
-            self.cv_scores = self.checkpoint.get('cv_scores', self.checkpoint.get('scores', [95.0] * 5))
+            self.label_mapping = self.checkpoint.get('label_mapping', {})
+            self.state_dicts = self.checkpoint.get('model_state_dicts', [])
+            self.cv_scores = self.checkpoint.get('cv_scores', [95.0] * 5)
 
-            # Add this debugging right after input_size is set
-            print(f"DEBUG {model_name}: input_size = {self.input_size}")
-            print(f"DEBUG {model_name}: label_mapping = {self.label_mapping}")
-
-            # For trail camera, let's force the input size to be correct
-            if self.model_name == 'trailcam':
-                self.input_size = [224, 224]  # Force square for trail camera
-                print(f"DEBUG: Forced trailcam input_size to {self.input_size}")
-
-            # Handle single model case
             if 'state_dict' in self.checkpoint and not self.state_dicts:
                 self.state_dicts = [self.checkpoint['state_dict']]
                 self.architectures = ['resnet50']
                 self.cv_scores = [95.0]
 
-            # If still missing critical info, use trail camera defaults
             if not self.label_mapping:
-                # Correct mapping based on training code: ages [1.5, 2.5, 3.5, 4.5, 5.5] -> indices [0, 1, 2, 3, 4]
                 self.label_mapping = {"1.5": 0, "2.5": 1, "3.5": 2, "4.5": 3, "5.5": 4}
 
             if not isinstance(self.state_dicts, list):
                 self.state_dicts = [self.state_dicts]
-
             if not isinstance(self.architectures, list):
                 self.architectures = [self.architectures]
-
             if not isinstance(self.cv_scores, list):
                 self.cv_scores = [self.cv_scores]
-
-            # Ensure we have 5 ResNet-50 models for trail camera
-            if self.model_name == 'trailcam' and len(self.architectures) == 1:
-                self.architectures = ['resnet50'] * len(self.state_dicts)
-
-            print(f"Using fallback structure: {len(self.state_dicts)} models, architectures: {self.architectures}")
 
         self.models = []
         self._load_models()
@@ -166,101 +120,55 @@ class DeerAnalyzer:
         self.weights = self.weights / self.weights.sum()
 
         print(f"Loaded {model_name} ensemble with {len(self.models)} models")
-        print(f"CV Scores: {[f'{score:.1f}%' for score in self.cv_scores]}")
 
     def _load_models(self):
         for i, (arch, state_dict) in enumerate(zip(self.architectures, self.state_dicts)):
-            try:
-                model = timm.create_model(arch, pretrained=False, num_classes=self.num_classes)
+            model = timm.create_model(arch, pretrained=False, num_classes=self.num_classes)
 
-                if hasattr(model, 'fc'):
-                    in_features = model.fc.in_features
-                    model.fc = nn.Sequential(
-                        nn.Dropout(0.3),
-                        nn.Linear(in_features, self.num_classes)
-                    )
-                elif hasattr(model, 'classifier'):
-                    if hasattr(model.classifier, 'in_features'):
-                        in_features = model.classifier.in_features
-                        model.classifier = nn.Sequential(
-                            nn.Dropout(0.3),
-                            nn.Linear(in_features, self.num_classes)
-                        )
-                    else:
-                        in_features = model.classifier[-1].in_features
-                        model.classifier[-1] = nn.Sequential(
-                            nn.Dropout(0.3),
-                            nn.Linear(in_features, self.num_classes)
-                        )
+            if hasattr(model, 'fc'):
+                in_features = model.fc.in_features
+                model.fc = nn.Sequential(nn.Dropout(0.3), nn.Linear(in_features, self.num_classes))
+            elif hasattr(model, 'classifier'):
+                if hasattr(model.classifier, 'in_features'):
+                    in_features = model.classifier.in_features
+                    model.classifier = nn.Sequential(nn.Dropout(0.3), nn.Linear(in_features, self.num_classes))
 
-                model.load_state_dict(state_dict, strict=True)
-                model.eval()
-                self.models.append(model)
-                print(f"Model {i + 1} ({arch}) loaded")
-            except Exception as e:
-                print(f"Failed to load model {i + 1}: {e}")
-                raise
-
-        if len(self.models) > 1:
-            print(f"Keeping all {len(self.models)} models for ensemble prediction...")
+            model.load_state_dict(state_dict, strict=True)
+            model.eval()
+            self.models.append(model)
 
     def preprocess_image(self, image_data):
-        try:
-            if ',' in image_data:
-                image_data = image_data.split(',')[1]
+        if ',' in image_data:
+            image_data = image_data.split(',')[1]
 
-            image_bytes = base64.b64decode(image_data)
-            image_array = np.frombuffer(image_bytes, np.uint8)
-            img = cv2.imdecode(image_array, cv2.IMREAD_COLOR)
+        image_bytes = base64.b64decode(image_data)
+        image_array = np.frombuffer(image_bytes, np.uint8)
+        img = cv2.imdecode(image_array, cv2.IMREAD_COLOR)
 
-            if img is None:
-                raise ValueError("Could not decode image")
+        if img is None:
+            raise ValueError("Could not decode image")
 
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        img_resized = cv2.resize(img, (self.input_size[1], self.input_size[0]))
+        original_image = img_resized.copy()
 
-            print(f"DEBUG {self.model_name}: Original image shape: {img.shape}")
-            print(f"DEBUG {self.model_name}: Resizing to: {self.input_size}")
+        if img_resized.max() > 1.0:
+            img_resized = img_resized / 255.0
 
-            img_resized = cv2.resize(img, (self.input_size[1], self.input_size[0]))
-            print(f"DEBUG {self.model_name}: Resized image shape: {img_resized.shape}")
+        img_tensor = torch.FloatTensor(img_resized).permute(2, 0, 1)
+        mean = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
+        std = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
+        img_normalized = (img_tensor - mean) / std
 
-            # Keep original_image in 0-255 range for heatmap overlay
-            original_image = img_resized.copy()
-
-            # Only normalize for the tensor
-            if img_resized.max() > 1.0:
-                img_resized = img_resized / 255.0
-
-            img_tensor = torch.FloatTensor(img_resized).permute(2, 0, 1)
-
-            mean = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
-            std = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
-            img_normalized = (img_tensor - mean) / std
-
-            print(f"DEBUG {self.model_name}: Input tensor shape: {img_normalized.shape}")
-
-            return img_normalized.unsqueeze(0), original_image
-
-        except Exception as e:
-            print(f"Preprocessing error: {e}")
-            raise
+        return img_normalized.unsqueeze(0), original_image
 
     def generate_heatmap(self, input_tensor, predicted_class, original_image):
         try:
-            print(f"DEBUG {self.model_name}: generate_heatmap called")
-            print(f"DEBUG {self.model_name}: input_tensor.shape = {input_tensor.shape}")
-            print(f"DEBUG {self.model_name}: original_image.shape = {original_image.shape}")
-
             best_model_idx = np.argmax(self.cv_scores)
             best_model = self.models[best_model_idx]
 
             grad_cam = GradCAM(best_model)
             heatmap = grad_cam.generate_cam(input_tensor, predicted_class)
-
-            if heatmap is not None:
-                print(f"DEBUG {self.model_name}: generated heatmap.shape = {heatmap.shape}")
-            else:
-                print(f"DEBUG {self.model_name}: GradCAM failed, using fallback")
 
             if heatmap is None:
                 h, w = original_image.shape[:2]
@@ -268,14 +176,8 @@ class DeerAnalyzer:
                 center_y, center_x = h // 2, w // 2
                 heatmap = np.exp(-((x - center_x) ** 2 + (y - center_y) ** 2) / (min(h, w) / 3) ** 2)
                 heatmap = heatmap / heatmap.max()
-                print(f"DEBUG {self.model_name}: fallback heatmap.shape = {heatmap.shape}")
 
-            print(f"DEBUG {self.model_name}: final heatmap.shape = {heatmap.shape}")
-            print(f"DEBUG {self.model_name}: original_image.shape before overlay = {original_image.shape}")
-
-            # Apply your sophisticated technique
             overlay = self.create_processed_heatmap_overlay(original_image, heatmap)
-            print(f"DEBUG {self.model_name}: overlay.shape = {overlay.shape}")
 
             overlay_pil = Image.fromarray(overlay)
             buffer = io.BytesIO()
@@ -289,83 +191,39 @@ class DeerAnalyzer:
             return None
 
     def create_processed_heatmap_overlay(self, original_image, heatmap):
-        """Apply overlay technique based on working local script"""
-        print(f"DEBUG {self.model_name}: create_processed_heatmap_overlay called")
-        print(f"DEBUG {self.model_name}: original_image.shape = {original_image.shape}")
-        print(f"DEBUG {self.model_name}: heatmap.shape = {heatmap.shape}")
-        print(f"DEBUG {self.model_name}: original_image min/max = {original_image.min()}/{original_image.max()}")
-        print(f"DEBUG {self.model_name}: heatmap min/max = {heatmap.min()}/{heatmap.max()}")
-
-        # Apply threshold - values < 0.001 become transparent
         heatmap_thresh = np.copy(heatmap)
         heatmap_thresh[heatmap_thresh < 0.001] = 0
-        print(f"DEBUG {self.model_name}: After threshold, non-zero pixels = {np.count_nonzero(heatmap_thresh)}")
 
-        # Normalize
         if heatmap_thresh.max() > 0:
             heatmap_thresh = heatmap_thresh / heatmap_thresh.max()
-        print(
-            f"DEBUG {self.model_name}: After normalize, heatmap_thresh min/max = {heatmap_thresh.min()}/{heatmap_thresh.max()}")
 
-        # Apply jet colormap with error handling
-        try:
-            heatmap_colored = cm.jet(heatmap_thresh)
-            heatmap_colored_rgb = (heatmap_colored[:, :, :3] * 255).astype(np.uint8)
-            print(f"DEBUG {self.model_name}: heatmap_colored_rgb.shape = {heatmap_colored_rgb.shape}")
-        except Exception as e:
-            print(f"Colormap error: {e}")
-            heatmap_colored_rgb = np.stack([heatmap_thresh * 255] * 3, axis=-1).astype(np.uint8)
+        heatmap_colored = cm.jet(heatmap_thresh)
+        heatmap_colored_rgb = (heatmap_colored[:, :, :3] * 255).astype(np.uint8)
 
-        # Create alpha channel from thresholded values
         alpha_channel = heatmap_thresh.copy()
         alpha_channel = (alpha_channel * 255).astype(np.uint8)
-        print(f"DEBUG {self.model_name}: alpha_channel non-zero pixels = {np.count_nonzero(alpha_channel)}")
 
-        # Apply contrast adjustment (-50) to original image
         adjusted_original = self.apply_brightness_contrast(original_image, 0, -50)
-        print(f"DEBUG {self.model_name}: adjusted_original.shape = {adjusted_original.shape}")
-        print(
-            f"DEBUG {self.model_name}: adjusted_original min/max = {adjusted_original.min()}/{adjusted_original.max()}")
 
-        # Create overlay using proper alpha blending
         overlay = adjusted_original.copy().astype(np.float32)
         mask = alpha_channel > 0
-        print(f"DEBUG {self.model_name}: mask has {np.count_nonzero(mask)} True pixels out of {mask.size} total")
 
         if np.any(mask):
             alpha_norm = alpha_channel[mask].astype(np.float32) / 255.0
             base = overlay[mask] / 255.0
             blend = heatmap_colored_rgb[mask].astype(np.float32) / 255.0
 
-            # Overlay blend mode (like Photoshop)
             overlay_blend = np.zeros_like(base)
             dark_mask = base <= 0.5
             overlay_blend[dark_mask] = 2 * base[dark_mask] * blend[dark_mask]
             overlay_blend[~dark_mask] = 1 - 2 * (1 - base[~dark_mask]) * (1 - blend[~dark_mask])
 
-            # Combine original and overlay using alpha
             overlay[mask] = (base * (1 - alpha_norm[:, np.newaxis]) +
                              overlay_blend * alpha_norm[:, np.newaxis]) * 255
 
-        final_overlay = np.clip(overlay, 0, 255).astype(np.uint8)
-        print(f"DEBUG {self.model_name}: final_overlay.shape = {final_overlay.shape}")
-        print(f"DEBUG {self.model_name}: final_overlay min/max = {final_overlay.min()}/{final_overlay.max()}")
-
-        return final_overlay
+        return np.clip(overlay, 0, 255).astype(np.uint8)
 
     def apply_brightness_contrast(self, image, brightness=0, contrast=0):
-        """Apply brightness and contrast adjustments"""
-        if brightness != 0:
-            if brightness > 0:
-                shadow = brightness
-                highlight = 255
-            else:
-                shadow = 0
-                highlight = 255 + brightness
-            alpha_b = (highlight - shadow) / 255
-            gamma_b = shadow
-            image = cv2.addWeighted(image, alpha_b, image, 0, gamma_b)
-
         if contrast != 0:
             f = 131 * (contrast + 127) / (127 * (131 - contrast))
             alpha_c = f
@@ -406,11 +264,7 @@ class DeerAnalyzer:
 
         except Exception as e:
             print(f"Analysis error: {e}")
-            traceback.print_exc()
-            return {
-                'success': False,
-                'error': str(e)
-            }
+            return {'success': False, 'error': str(e)}
 
 
 jawbone_analyzer = None
@@ -421,39 +275,17 @@ def download_model(model_type):
     if model_type == 'jawbone':
         MODEL_URL = "https://www.dropbox.com/scl/fi/ziq8fbcx7l8jlk3ea5ofd/jawbone_ensemble.pth?rlkey=y7e51qh7xdvfj5k05x6ml4xzw&st=ndzw14qe&dl=1"
         local_path = "/app/jawbone_ensemble.pth"
-    else:  # trailcam
+    else:
         MODEL_URL = "https://www.dropbox.com/scl/fi/mlxzmdxmbsva2xcjmk0aq/trailcam_ensemble.pth?rlkey=j20g65643vogy0etiyrlnbz97&dl=1"
         local_path = "/app/trailcam_ensemble.pth"
 
-    expected_min_size = 100000000
+    if os.path.exists(local_path) and os.path.getsize(local_path) > 100000000:
+        return local_path
 
-    if os.path.exists(local_path):
-        file_size = os.path.getsize(local_path)
-        print(f"{model_type} model already exists: {local_path} ({file_size} bytes)")
-
-        if file_size > expected_min_size:
-            return local_path
-        else:
-            print(f"File too small ({file_size} bytes), re-downloading...")
-            os.remove(local_path)
-
-    try:
-        print(f"Downloading {model_type} model from Dropbox...")
-        os.makedirs(os.path.dirname(local_path), exist_ok=True)
-
-        urllib.request.urlretrieve(MODEL_URL, local_path)
-
-        if os.path.exists(local_path):
-            file_size = os.path.getsize(local_path)
-            print(f"{model_type} model downloaded successfully! Size: {file_size} bytes")
-            return local_path
-        else:
-            print(f"{model_type} download failed")
-            return None
-
-    except Exception as e:
-        print(f"Failed to download {model_type} model: {e}")
-        return None
+    print(f"Downloading {model_type} model...")
+    os.makedirs(os.path.dirname(local_path), exist_ok=True)
+    urllib.request.urlretrieve(MODEL_URL, local_path)
+    return local_path
 
 
 @app.route('/health', methods=['GET'])
@@ -469,67 +301,38 @@ def health_check():
 def analyze_endpoint():
     try:
         data = request.get_json()
-
         if not data or 'image' not in data:
-            return jsonify({
-                'success': False,
-                'error': 'No image data provided'
-            }), 400
+            return jsonify({'success': False, 'error': 'No image data provided'}), 400
 
         model_type = data.get('model_type', 'jawbone')
         include_heatmap = data.get('include_heatmap', False)
 
         if model_type == 'jawbone':
-            if jawbone_analyzer is None:
-                return jsonify({
-                    'success': False,
-                    'error': 'Jawbone model not loaded'
-                }), 500
             analyzer = jawbone_analyzer
         elif model_type == 'trailcam':
-            if trailcam_analyzer is None:
-                return jsonify({
-                    'success': False,
-                    'error': 'Trail camera model not loaded'
-                }), 500
             analyzer = trailcam_analyzer
         else:
-            return jsonify({
-                'success': False,
-                'error': f'Unknown model type: {model_type}'
-            }), 400
+            return jsonify({'success': False, 'error': f'Unknown model type: {model_type}'}), 400
+
+        if analyzer is None:
+            return jsonify({'success': False, 'error': f'{model_type} model not loaded'}), 500
 
         result = analyzer.analyze_image(data['image'], include_heatmap)
-
-        if result['success']:
-            return jsonify(result)
-        else:
-            return jsonify(result), 400
+        return jsonify(result)
 
     except Exception as e:
         print(f"Endpoint error: {e}")
-        traceback.print_exc()
-        return jsonify({
-            'success': False,
-            'error': 'Internal server error'
-        }), 500
+        return jsonify({'success': False, 'error': 'Internal server error'}), 500
 
 
 @app.route('/', methods=['GET'])
 def home():
-    jawbone_status = "Loaded" if jawbone_analyzer is not None else "Not loaded"
-    trailcam_status = "Loaded" if trailcam_analyzer is not None else "Not loaded"
-
     return jsonify({
         'message': 'Deer Age Analysis API',
         'status': 'running',
         'models': {
-            'jawbone': jawbone_status,
-            'trailcam': trailcam_status
-        },
-        'endpoints': {
-            'health': '/health',
-            'analyze': '/analyze (POST)'
+            'jawbone': "Loaded" if jawbone_analyzer else "Not loaded",
+            'trailcam': "Loaded" if trailcam_analyzer else "Not loaded"
         }
     })
 
@@ -540,36 +343,25 @@ def init_models():
     try:
         print("Initializing models...")
 
-        # Load jawbone model
         jawbone_path = download_model('jawbone')
         if jawbone_path:
             jawbone_analyzer = DeerAnalyzer(jawbone_path, 'jawbone')
-            print("Jawbone model loaded successfully!")
-        else:
-            print("Failed to load jawbone model")
+            print("Jawbone model loaded!")
 
-        # Load trailcam model
         trailcam_path = download_model('trailcam')
         if trailcam_path:
             trailcam_analyzer = DeerAnalyzer(trailcam_path, 'trailcam')
-            print("Trail camera model loaded successfully!")
-        else:
-            print("Failed to load trail camera model")
+            print("Trail camera model loaded!")
 
-        if jawbone_analyzer is None and trailcam_analyzer is None:
-            print("Failed to load any models")
-            return False
-
-        print("Model initialization complete!")
+        print("Models ready!")
         return True
 
     except Exception as e:
         print(f"Failed to initialize models: {e}")
-        traceback.print_exc()
         return False
 
 
-print("Starting Deer Age Analysis API...")
+print("Starting API...")
 init_models()
 print("API ready!")
 
