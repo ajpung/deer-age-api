@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 import torch
 import torch.nn as nn
@@ -14,6 +14,8 @@ import matplotlib.cm as cm
 import os
 import traceback
 import urllib.request
+from datetime import datetime
+import glob
 
 app = Flask(__name__)
 CORS(app, origins="*")
@@ -114,6 +116,11 @@ class DeerAnalyzer:
 
         print(f"DEBUG: {model_name} using input_size: {self.input_size}")
 
+        # Convert list to tuple to match working jawbone format
+        if isinstance(self.input_size, list):
+            self.input_size = tuple(self.input_size)
+            print(f"DEBUG: Converted {model_name} input_size to tuple: {self.input_size}")
+
         self.models = []
         self._load_models()
 
@@ -173,20 +180,31 @@ class DeerAnalyzer:
             heatmap = grad_cam.generate_cam(input_tensor, predicted_class)
 
             if heatmap is None:
-                h, w = original_image.shape[:2]
-                y, x = np.ogrid[:h, :w]
-                center_y, center_x = h // 2, w // 2
-                heatmap = np.exp(-((x - center_x) ** 2 + (y - center_y) ** 2) / (min(h, w) / 3) ** 2)
-                heatmap = heatmap / heatmap.max()
+                print(f"ERROR: GradCAM failed for {self.model_name}")
+                return None
 
+            # Save individual components to /tmp/
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+            # Original processed image
+            original_filename = f"/tmp/{self.model_name}_original_{timestamp}.png"
+            Image.fromarray(original_image.astype(np.uint8)).save(original_filename)
+
+            # Raw heatmap
+            heatmap_colored = cm.jet(heatmap)
+            heatmap_img = (heatmap_colored[:, :, :3] * 255).astype(np.uint8)
+            heatmap_filename = f"/tmp/{self.model_name}_heatmap_{timestamp}.png"
+            Image.fromarray(heatmap_img).save(heatmap_filename)
+
+            # Final overlay
             overlay = self.create_processed_heatmap_overlay(original_image, heatmap)
+            overlay_filename = f"/tmp/{self.model_name}_overlay_{timestamp}.png"
+            Image.fromarray(overlay).save(overlay_filename)
 
-            # DEBUG: Save to file
-            import datetime
-            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            debug_filename = f"/tmp/{self.model_name}_heatmap_{timestamp}.png"
-            Image.fromarray(overlay).save(debug_filename)
-            print(f"DEBUG: Saved {self.model_name} heatmap to {debug_filename}")
+            print(f"DEBUG: Saved {self.model_name} images:")
+            print(f"  Original: {original_filename}")
+            print(f"  Heatmap: {heatmap_filename}")
+            print(f"  Overlay: {overlay_filename}")
 
             overlay_pil = Image.fromarray(overlay)
             buffer = io.BytesIO()
@@ -304,6 +322,22 @@ def health_check():
         'jawbone_loaded': jawbone_analyzer is not None,
         'trailcam_loaded': trailcam_analyzer is not None
     })
+
+
+@app.route('/debug_files', methods=['GET'])
+def list_debug_files():
+    files = glob.glob('/tmp/*.png')
+    file_list = [os.path.basename(f) for f in files]
+    return jsonify({'files': file_list})
+
+
+@app.route('/debug_file/<filename>', methods=['GET'])
+def get_debug_file(filename):
+    filepath = f'/tmp/{filename}'
+    if os.path.exists(filepath):
+        return send_file(filepath, mimetype='image/png')
+    else:
+        return jsonify({'error': 'File not found'}), 404
 
 
 @app.route('/analyze', methods=['POST'])
