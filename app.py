@@ -181,6 +181,13 @@ class DeerAnalyzer:
 
             overlay = self.create_processed_heatmap_overlay(original_image, heatmap)
 
+            # DEBUG: Save to file
+            import datetime
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            debug_filename = f"/tmp/{self.model_name}_heatmap_{timestamp}.png"
+            Image.fromarray(overlay).save(debug_filename)
+            print(f"DEBUG: Saved {self.model_name} heatmap to {debug_filename}")
+
             overlay_pil = Image.fromarray(overlay)
             buffer = io.BytesIO()
             overlay_pil.save(buffer, format='PNG')
