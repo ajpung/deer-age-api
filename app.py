@@ -112,9 +112,6 @@ class DeerAnalyzer:
             if not isinstance(self.cv_scores, list):
                 self.cv_scores = [self.cv_scores]
 
-        # Ensure input_size is always a list
-        self.input_size = list(self.input_size)
-
         print(f"DEBUG: {model_name} using input_size: {self.input_size}")
 
         self.models = []
