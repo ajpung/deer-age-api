@@ -158,6 +158,14 @@ class DeerAnalyzer:
             raise ValueError("Could not decode image")
 
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+        # DEBUG: Save raw received image
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        raw_filename = f"/tmp/{self.model_name}_raw_received_{timestamp}.png"
+        Image.fromarray(img).save(raw_filename)
+        print(f"DEBUG: Saved raw received image: {raw_filename}")
+        print(f"DEBUG: Raw image shape: {img.shape}")
+
         img_resized = cv2.resize(img, (self.input_size[1], self.input_size[0]))
         original_image = img_resized.copy()
 
