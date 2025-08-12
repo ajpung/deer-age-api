@@ -75,7 +75,6 @@ class GradCAM:
             return None
 
 
-class DeerAnalyzer:
     def __init__(self, checkpoint_path, model_name):
         print(f"Loading {model_name} ensemble...")
         self.model_name = model_name
@@ -112,7 +111,9 @@ class DeerAnalyzer:
             if not isinstance(self.cv_scores, list):
                 self.cv_scores = [self.cv_scores]
 
-        # ADD THIS DEBUG LINE HERE:
+        # Ensure output shape is always a list
+        self.input_size = list(self.input_size)
+
         print(f"DEBUG: {model_name} using input_size: {self.input_size}")
 
         self.models = []
