@@ -203,7 +203,8 @@ class DeerAnalyzer:
             best_model_idx = np.argmax(self.cv_scores)
             best_model = self.models[best_model_idx]
 
-            grad_cam = GradCAM(best_model)
+            # Pass model_type to GradCAM
+            grad_cam = GradCAM(best_model, self.model_name)  # self.model_name is "jawbone" or "trailcam"
             heatmap = grad_cam.generate_cam(input_tensor, predicted_class)
 
             if heatmap is None:
