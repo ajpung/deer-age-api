@@ -22,20 +22,38 @@ CORS(app, origins="*")
 
 
 class GradCAM:
-    def __init__(self, model):
+    def __init__(self, model, model_type="jawbone"):
         self.model = model
+        self.model_type = model_type
         self.target_layer = None
         self.gradients = None
         self.activations = None
 
-        for name, module in self.model.named_modules():
-            if isinstance(module, nn.Conv2d):
-                self.target_layer = module
+        # Different target layer selection based on model type
+        if model_type == "trailcam":
+            # ResNet-18 specific target layer for trailcam
+            try:
+                self.target_layer = model.layer4[-1].conv2
+                print(f"TrailCam: Using ResNet-18 specific target layer: layer4[-1].conv2")
+            except Exception as e:
+                print(f"TrailCam: Failed to use ResNet-18 layer, falling back to automatic: {e}")
+                self._use_automatic_selection()
+        else:
+            # Keep existing automatic selection for jawbone (working)
+            self._use_automatic_selection()
 
         if self.target_layer is not None:
             self.target_layer.register_forward_hook(self.save_activation)
             self.target_layer.register_full_backward_hook(self.save_gradient)
 
+    def _use_automatic_selection(self):
+        """Original automatic target layer selection"""
+        for name, module in self.model.named_modules():
+            if isinstance(module, nn.Conv2d):
+                self.target_layer = module
+        print(f"{self.model_type}: Using automatic target layer selection")
+
+    # Rest of the GradCAM methods stay exactly the same
     def save_activation(self, module, input, output):
         self.activations = output
 
@@ -43,6 +61,7 @@ class GradCAM:
         self.gradients = grad_output[0]
 
     def generate_cam(self, input_tensor, class_idx):
+        # This method stays exactly the same
         if self.target_layer is None:
             return None
 
