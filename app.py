@@ -34,7 +34,7 @@ class GradCAM:
             # ResNet-50 specific target layer for trailcam
             try:
                 self.target_layer = model.layer4[-1].conv3
-                print(f"TrailCam: Using ResNet-50 specific target layer: layer4[-1].conv2")
+                print(f"TrailCam: Using ResNet-50 specific target layer: layer4[-1].conv3")
             except Exception as e:
                 print(f"TrailCam: Failed to use ResNet-50 layer, falling back to automatic: {e}")
                 self._use_automatic_selection()
@@ -53,7 +53,6 @@ class GradCAM:
                 self.target_layer = module
         print(f"{self.model_type}: Using automatic target layer selection")
 
-    # Rest of the GradCAM methods stay exactly the same
     def save_activation(self, module, input, output):
         self.activations = output
 
@@ -61,7 +60,6 @@ class GradCAM:
         self.gradients = grad_output[0]
 
     def generate_cam(self, input_tensor, class_idx):
-        # This method stays exactly the same
         if self.target_layer is None:
             return None
 
@@ -102,8 +100,19 @@ class DeerAnalyzer:
         self.model_name = model_name
         self.checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
 
-        # Handle different checkpoint formats
-        if 'architectures_used' in self.checkpoint:
+        # Handle the ACTUAL checkpoint format for trailcam
+        if 'model_architecture' in self.checkpoint:  # Your actual trailcam format
+            # Use the actual saved architecture for all models
+            single_arch = self.checkpoint['model_architecture']  # 'resnet50'
+            num_models = self.checkpoint.get('num_models', 5)
+            self.architectures = [single_arch] * num_models  # ['resnet50'] * 5
+            self.num_classes = self.checkpoint['num_classes']
+            self.input_size = (224, 224)  # Standard for ResNet-50
+            self.label_mapping = self.checkpoint['label_mapping']
+            self.state_dicts = self.checkpoint['model_state_dicts']
+            self.cv_scores = self.checkpoint['cv_scores']
+            print(f"DEBUG: Using actual checkpoint format for {model_name}")
+        elif 'architectures_used' in self.checkpoint:  # Legacy jawbone format
             self.architectures = self.checkpoint['architectures_used']
             self.num_classes = self.checkpoint['num_classes']
             self.input_size = self.checkpoint['input_size']
@@ -111,6 +120,7 @@ class DeerAnalyzer:
             self.state_dicts = self.checkpoint['model_state_dicts']
             self.cv_scores = self.checkpoint['cv_scores']
         else:
+            # Fallback for older formats
             self.architectures = self.checkpoint.get('architectures', ['resnet50'] * 5)
             self.num_classes = self.checkpoint.get('num_classes', 10)
             self.input_size = self.checkpoint.get('input_size', [224, 224])
@@ -133,6 +143,7 @@ class DeerAnalyzer:
             if not isinstance(self.cv_scores, list):
                 self.cv_scores = [self.cv_scores]
 
+        print(f"DEBUG: {model_name} architectures: {self.architectures}")
         print(f"DEBUG: {model_name} using input_size: {self.input_size}")
 
         # Convert list to tuple to match working jawbone format
@@ -204,7 +215,7 @@ class DeerAnalyzer:
             best_model = self.models[best_model_idx]
 
             # Pass model_type to GradCAM
-            grad_cam = GradCAM(best_model, self.model_name)  # self.model_name is "jawbone" or "trailcam"
+            grad_cam = GradCAM(best_model, self.model_name)
             heatmap = grad_cam.generate_cam(input_tensor, predicted_class)
 
             if heatmap is None:
