@@ -60,6 +60,7 @@ class GradCAM:
         self.gradients = grad_output[0]
 
     def generate_cam(self, input_tensor, class_idx):
+        # This method stays exactly the same as original
         if self.target_layer is None:
             return None
 
