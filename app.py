@@ -31,12 +31,12 @@ class GradCAM:
 
         # Different target layer selection based on model type
         if model_type == "trailcam":
-            # ResNet-18 specific target layer for trailcam
+            # ResNet-50 specific target layer for trailcam
             try:
-                self.target_layer = model.layer4[-1].conv2
-                print(f"TrailCam: Using ResNet-18 specific target layer: layer4[-1].conv2")
+                self.target_layer = model.layer4[-1].conv3
+                print(f"TrailCam: Using ResNet-50 specific target layer: layer4[-1].conv2")
             except Exception as e:
-                print(f"TrailCam: Failed to use ResNet-18 layer, falling back to automatic: {e}")
+                print(f"TrailCam: Failed to use ResNet-50 layer, falling back to automatic: {e}")
                 self._use_automatic_selection()
         else:
             # Keep existing automatic selection for jawbone (working)
