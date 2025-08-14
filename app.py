@@ -101,19 +101,18 @@ class DeerAnalyzer:
         self.model_name = model_name
         self.checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
 
-        # Handle the ACTUAL checkpoint format for trailcam
-        if 'model_architecture' in self.checkpoint:  # Your actual trailcam format
-            # Use the actual saved architecture for all models
-            single_arch = self.checkpoint['model_architecture']  # 'resnet50'
-            num_models = self.checkpoint.get('num_models', 5)
-            self.architectures = [single_arch] * num_models  # ['resnet50'] * 5
+        # Handle the ACTUAL checkpoint format - NO FALLBACKS
+        if 'model_architecture' in self.checkpoint:  # Actual trailcam format
+            single_arch = self.checkpoint['model_architecture']
+            num_models = self.checkpoint['num_models']
+            self.architectures = [single_arch] * num_models
             self.num_classes = self.checkpoint['num_classes']
-            self.input_size = (224, 224)  # Standard for ResNet-50
+            self.input_size = (224, 224)
             self.label_mapping = self.checkpoint['label_mapping']
             self.state_dicts = self.checkpoint['model_state_dicts']
             self.cv_scores = self.checkpoint['cv_scores']
             print(f"DEBUG: Using actual checkpoint format for {model_name}")
-        elif 'architectures_used' in self.checkpoint:  # Legacy jawbone format
+        elif 'architectures_used' in self.checkpoint:  # Jawbone format
             self.architectures = self.checkpoint['architectures_used']
             self.num_classes = self.checkpoint['num_classes']
             self.input_size = self.checkpoint['input_size']
@@ -121,28 +120,7 @@ class DeerAnalyzer:
             self.state_dicts = self.checkpoint['model_state_dicts']
             self.cv_scores = self.checkpoint['cv_scores']
         else:
-            # Fallback for older formats
-            self.architectures = self.checkpoint.get('architectures', ['resnet50'] * 5)
-            self.num_classes = self.checkpoint.get('num_classes', 10)
-            self.input_size = self.checkpoint.get('input_size', [224, 224])
-            self.label_mapping = self.checkpoint.get('label_mapping', {})
-            self.state_dicts = self.checkpoint.get('model_state_dicts', [])
-            self.cv_scores = self.checkpoint.get('cv_scores', [95.0] * 5)
-
-            if 'state_dict' in self.checkpoint and not self.state_dicts:
-                self.state_dicts = [self.checkpoint['state_dict']]
-                self.architectures = ['resnet50']
-                self.cv_scores = [95.0]
-
-            if not self.label_mapping:
-                self.label_mapping = {"1.5": 0, "2.5": 1, "3.5": 2, "4.5": 3, "5.5": 4}
-
-            if not isinstance(self.state_dicts, list):
-                self.state_dicts = [self.state_dicts]
-            if not isinstance(self.architectures, list):
-                self.architectures = [self.architectures]
-            if not isinstance(self.cv_scores, list):
-                self.cv_scores = [self.cv_scores]
+            raise ValueError(f"Unknown checkpoint format for {model_name}. Missing required keys: {list(self.checkpoint.keys())}")
 
         print(f"DEBUG: {model_name} architectures: {self.architectures}")
         print(f"DEBUG: {model_name} using input_size: {self.input_size}")
