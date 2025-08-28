@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Dashboard - Age My Deer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f8f9fa;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header-section {
+            display: flex;
+            align-items: center;
+            margin-bottom: 40px;
+        }
+        .header-title {
+            font-family: 'Bebas Neue', Arial, sans-serif;
+            font-size: 80px;
+            margin: 0;
+            margin-right: 40px;
+            color: #333;
+        }
+        .header-divider {
+            height: 60px;
+            width: 70px;
+            background-color: #024700;
+            flex-grow: 1;
+        }
+        .getting-started {
+            background-color: #f8f9fa;
+            text-align: center;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+        }
+        .getting-started h3 {
+            color: #0C71C3;
+            margin-top: 0;
+        }
+        .credits-display {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .credits-number {
+            font-size: 48px;
+            font-weight: bold;
+            color: #4CAF50;
+        }
+        .credits-label {
+            font-size: 18px;
+            margin-top: 10px;
+        }
+        .button-row {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin-bottom: 40px;
+        }
+        .btn {
+            background-color: #0C71C3;
+            color: white;
+            padding: 15px 30px;
+            font-size: 25px;
+            border: none;
+            border-radius: 15px;
+            text-decoration: none;
+            display: inline-block;
+            cursor: pointer;
+        }
+        .btn:hover {
+            background-color: #0956a3;
+        }
+				/* STATS CARD ON DASHBOARD*/
+      	.stats-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 40px;
+            align-items: stretch; /* Make all cards same height */
+        }
+        .stat-card {
+            text-align: center;
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            min-height: 180px;
+        }
+        .stat-title {
+            font-family: 'Bebas Neue', Arial, sans-serif;
+            font-size: 30px;
+            line-height: 1.2em;
+            margin: 0 0 15px 0;
+            color: #333;
+            flex-shrink: 0; /* Prevent title from shrinking */
+        }
+        .stat-content {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            flex-grow: 1;
+            min-height: 120px;
+        }
+        .stat-number {
+            font-size: 36px;
+            font-weight: bold;
+            color: #0C71C3;
+            margin: 10px 0;
+            height: 120px; /* Match age-chart-container height */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .stat-description {
+            font-size: 16px;
+            line-height: 1.8em;
+            color: #666;
+        }
+        #age-chart-container {
+            margin: 10px 0;
+            height: 120px; /* Reduced from 250px */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-grow: 1; /* Allow it to take remaining space */
+        }
+        .age-chart-placeholder {
+            color: #0C71C3;
+            font-size: 18px;
+        }
+        .donut-chart-wrapper {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .donut-chart {
+            position: relative;
+        }
+        .donut-center {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            font-weight: bold;
+        }
+        .donut-total {
+            font-size: 20px;
+            color: #333;
+        }
+        .donut-label {
+            font-size: 12px;
+            color: #666;
+            margin-top: 2px;
+        }
+        .chart-segment {
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        .chart-segment:hover {
+            opacity: 0.8;
+        }
+        .tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 14px;
+            pointer-events: none;
+            z-index: 10000;
+            opacity: 0;
+            transition: opacity 0.2s;
+            white-space: nowrap;
+        }
+        @media (max-width: 768px) {
+            .header-title {
+                font-size: 42px;
+            }
+            .stats-row {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+            .button-row {
+                flex-direction: column;
+                align-items: center;
+            }
+            .stat-title {
+                font-size: 24px;
+            }
+        }
+        @media (max-width: 480px) {
+            .header-title {
+                font-size: 30px;
+            }
+            .stat-title {
+                font-size: 20px;
+            }
+            .stat-description {
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header Section -->
+        <div class="header-section">
+            <h1 class="header-title">dashboard</h1>
+            <div class="header-divider"></div>
+        </div>
+
+        <!-- Getting Started Section -->
+        <div class="getting-started">
+            <h3>Getting Started</h3>
+            <p><strong>New here?</strong> Click "Age My Deer" below to analyze your first deer image. Each analysis costs 1 credit, or 2 credits with an attention heatmap.</p>
+            <p><strong>Need credits?</strong> Visit our shop to purchase credit packages and start aging your deer!</p>
+        </div>
+
+        <!-- Credits Display -->
+        <div class="credits-display">
+            <div class="credits-number" id="user-credits">Loading...</div>
+            <div class="credits-label">Available Credits</div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="button-row">
+            <a href="/ai-analysis/" class="btn">Age My Deer</a>
+            <a href="/shop-2/" class="btn">Buy Credits</a>
+        </div>
+
+        <!-- Statistics Cards -->
+        <div class="stats-row">
+            <!-- Total Deer Aged -->
+            <div class="stat-card">
+                <h3 class="stat-title">Total Deer Aged</h3>
+                <div class="stat-content">
+                    <div class="stat-number" id="total-deer-count">-</div>
+                </div>
+            </div>
+            <!-- Age Distribution -->
+            <div class="stat-card">
+                <h3 class="stat-title">Age Distribution</h3>
+                <div class="stat-content">
+                    <div id="age-chart-container">
+                        <!-- chart content -->
+                    </div>
+                </div>
+            </div>
+            <!-- This Month -->
+            <div class="stat-card">
+                <h3 class="stat-title">This Month</h3>
+                <div class="stat-content">
+              		<div class="stat-number" id="month-deer-count">-</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            loadUserCredits();
+            loadDashboardStats();
+        });
+
+        // Load user's current credit balance
+        function loadUserCredits() {
+            fetch('/wp-admin/admin-ajax.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({
+                    action: 'get_user_credits'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                const creditsElement = document.getElementById('user-credits');
+                if (creditsElement) {
+                    creditsElement.textContent = data.credits || '0';
+                }
+            })
+            .catch(error => {
+                console.log('Credits loading error:', error);
+                const creditsElement = document.getElementById('user-credits');
+                if (creditsElement) {
+                    creditsElement.textContent = '0';
+                }
+            });
+        }
+
+        // Load dashboard statistics
+        function loadDashboardStats() {
+            fetch('/wp-admin/admin-ajax.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({
+                    action: 'get_dashboard_stats'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Dashboard stats response:', data);
+                if (data.success) {
+                    updateStatsDisplay(data.data);
+                } else {
+                    console.error('Dashboard stats error:', data.data);
+                }
+            })
+            .catch(error => {
+                console.log('Stats loading error:', error);
+            });
+        }
+
+        // Update the statistics display with real data
+        function updateStatsDisplay(stats) {
+            const totalElement = document.getElementById('total-deer-count');
+            const monthElement = document.getElementById('month-deer-count');
+            
+            if (totalElement) {
+                totalElement.textContent = stats.total || '0';
+            }
+            if (monthElement) {
+                monthElement.textContent = stats.this_month || '0';
+            }
+            
+            // Update age distribution chart if we have data
+            if (stats.ages && stats.ages.length > 0) {
+                createAgeChart(stats.ages);
+            }
+        }
+
+        // Create age distribution donut chart
+        function createAgeChart(ages) {
+            const chartContainer = document.getElementById('age-chart-container');
+            if (!chartContainer) return;
+            
+            // Group ages into meaningful ranges
+            const ageRanges = groupAgeData(ages);
+            const total = Object.values(ageRanges).reduce((sum, count) => sum + count, 0);
+            
+            if (total === 0) return;
+            
+            // Create donut chart HTML
+            const chartHtml = createDonutChart(ageRanges, total);
+            chartContainer.innerHTML = chartHtml;
+            
+            // Add tooltip functionality after chart is rendered
+            setTimeout(addTooltipListeners, 0);
+        }
+
+        // Use exact age values from model (no artificial grouping)
+        function groupAgeData(ages) {
+            const ageGroups = {};
+            
+            ages.forEach(ageData => {
+                const age = parseFloat(ageData.predicted_age);
+                const count = parseInt(ageData.count);
+                
+                // Format age display
+                let ageLabel;
+                if (age >= 5.5) {
+                    ageLabel = '5.5y+';
+                } else {
+                    ageLabel = age.toFixed(1) + 'y';
+                }
+                
+                ageGroups[ageLabel] = count;
+            });
+            
+            return ageGroups;
+        }
+
+        // Create SVG donut chart with hover tooltips
+        function createDonutChart(ageRanges, total) {
+            const colors = ['#ffeca6', '#9eb3ce', '#aeb782', '#48540c', '#6c4323'];
+            const size = 160;
+            const centerX = size / 2;
+            const centerY = size / 2;
+            const outerRadius = 65;
+            const innerRadius = 35;
+            
+            let html = '<div class="donut-chart-wrapper">';
+            html += `<div class="donut-chart" style="position: relative;">
+                <svg width="${size}" height="${size}">`;
+            
+            let currentAngle = 0;
+            const rangeKeys = Object.keys(ageRanges);
+            
+            rangeKeys.forEach((range, index) => {
+                const count = ageRanges[range];
+                const percentage = (count / total);
+                const angleInRadians = percentage * 2 * Math.PI;
+                
+                // Calculate path coordinates
+                const startAngle = currentAngle;
+                const endAngle = currentAngle + angleInRadians;
+                
+                const x1 = centerX + outerRadius * Math.cos(startAngle);
+                const y1 = centerY + outerRadius * Math.sin(startAngle);
+                const x2 = centerX + outerRadius * Math.cos(endAngle);
+                const y2 = centerY + outerRadius * Math.sin(endAngle);
+                
+                const x3 = centerX + innerRadius * Math.cos(endAngle);
+                const y3 = centerY + innerRadius * Math.sin(endAngle);
+                const x4 = centerX + innerRadius * Math.cos(startAngle);
+                const y4 = centerY + innerRadius * Math.sin(startAngle);
+                
+                const largeArcFlag = angleInRadians > Math.PI ? 1 : 0;
+                
+                const pathData = [
+                    `M ${x1} ${y1}`,
+                    `A ${outerRadius} ${outerRadius} 0 ${largeArcFlag} 1 ${x2} ${y2}`,
+                    `L ${x3} ${y3}`,
+                    `A ${innerRadius} ${innerRadius} 0 ${largeArcFlag} 0 ${x4} ${y4}`,
+                    'Z'
+                ].join(' ');
+                
+                const percentageDisplay = Math.round(percentage * 100);
+                
+                html += `<path 
+                    d="${pathData}" 
+                    fill="${colors[index % colors.length]}"
+                    class="chart-segment"
+                    data-tooltip="${range}: ${count} deer (${percentageDisplay}%)"
+                />`;
+                
+                currentAngle += angleInRadians;
+            });
+            
+            html += `</svg>
+                <div class="donut-center">
+                    <div class="donut-total">${total}</div>
+                    <div class="donut-label">Total</div>
+                </div>
+                <div class="tooltip" id="chart-tooltip"></div>
+            </div>`;
+            
+            html += '</div>';
+            
+            return html;
+        }
+
+        // Add tooltip functionality after chart is created
+        function addTooltipListeners() {
+            const segments = document.querySelectorAll('.chart-segment');
+            const tooltip = document.getElementById('chart-tooltip');
+            const chartWrapper = document.querySelector('.donut-chart-wrapper');
+            
+            if (!tooltip || !chartWrapper) return;
+            
+            segments.forEach(segment => {
+                segment.addEventListener('mouseenter', (e) => {
+                    const tooltipText = e.target.getAttribute('data-tooltip');
+                    tooltip.textContent = tooltipText;
+                    tooltip.style.opacity = '1';
+                });
+                
+                segment.addEventListener('mousemove', (e) => {
+                    const rect = chartWrapper.getBoundingClientRect();
+                    const x = e.clientX - rect.left + 15;
+                    const y = e.clientY - rect.top - 10;
+                    
+                    tooltip.style.left = x + 'px';
+                    tooltip.style.top = y + 'px';
+                });
+                
+                segment.addEventListener('mouseleave', () => {
+                    tooltip.style.opacity = '0';
+                });
+            });
+        }
+
+        // Test function to simulate data (for debugging)
+        function testWithSampleData() {
+            const sampleStats = {
+                total: 15,
+                this_month: 5,
+                ages: [
+                    { predicted_age: '1.5', count: '3' },
+                    { predicted_age: '2.5', count: '5' },
+                    { predicted_age: '3.5', count: '4' },
+                    { predicted_age: '4.5', count: '2' },
+                    { predicted_age: '5.5', count: '1' }
+                ]
+            };
+            updateStatsDisplay(sampleStats);
+            
+            // Also update credits
+            document.getElementById('user-credits').textContent = '8';
+        }
+
+        // Uncomment the line below to test with sample data
+        // testWithSampleData();
+    </script>
+</body>
+</html>

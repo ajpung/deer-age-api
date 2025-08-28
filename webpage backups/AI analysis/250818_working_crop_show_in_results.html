@@ -1,0 +1,1232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DeerAgeAI - Image Cropping Tool</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f5dc;
+            color: #000000;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            color: #000000;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            color: #333333;
+        }
+
+        /* Model Selection */
+        .model-selection {
+            margin-bottom: 2rem;
+        }
+
+        .model-selection h2 {
+            text-align: center;
+            margin-bottom: 1rem;
+            color: #000000;
+        }
+
+        .model-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .model-btn {
+            padding: 12px 24px;
+            border: 2px solid #2d4a2d;
+            background: transparent;
+            color: #2d4a2d;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+
+        .model-btn:hover {
+            background: rgba(45, 74, 45, 0.1);
+        }
+
+        .model-btn.active {
+            background: #2d4a2d;
+            border-color: #2d4a2d;
+            color: #ffffff;
+        }
+
+        /* Drop Zone */
+        .drop-zone {
+            border: 3px dashed #2d4a2d;
+            border-radius: 12px;
+            padding: 3rem;
+            text-align: center;
+            background: rgba(45, 74, 45, 0.1);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 2rem;
+        }
+
+        .drop-zone:hover {
+            background: rgba(45, 74, 45, 0.2);
+            border-color: #1a4d1a;
+        }
+
+        .drop-zone.dragover {
+            background: rgba(45, 74, 45, 0.3);
+            border-color: #1a4d1a;
+            transform: scale(1.02);
+        }
+
+        .drop-zone h3 {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+            color: #000000;
+        }
+
+        .drop-zone p {
+            color: #333333;
+            margin-bottom: 1rem;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .upload-btn {
+            background: #2d4a2d;
+            color: #ffffff;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .upload-btn:hover {
+            background: #1a4d1a;
+            transform: translateY(-2px);
+        }
+
+        /* Crop Interface */
+        .crop-interface {
+            display: none;
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .crop-interface.active {
+            display: block;
+        }
+
+        .crop-interface h2 {
+            text-align: center;
+            margin-bottom: 1rem;
+            color: #000000;
+        }
+
+        .crop-info {
+            text-align: center;
+            margin-bottom: 1.5rem;
+            color: #333333;
+        }
+
+        .crop-container {
+            position: relative;
+            display: inline-block;
+            margin: 0 auto;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .crop-image {
+            display: block;
+            max-width: 100%;
+            max-height: 500px;
+            user-select: none;
+            -webkit-user-drag: none;
+        }
+
+        /* Crop Overlay */
+        .crop-overlay {
+            position: absolute;
+            border: 2px solid #daa520;
+            background: rgba(218, 165, 32, 0.1);
+            cursor: move;
+            box-shadow:
+                0 0 0 9999px rgba(0, 0, 0, 0.5),
+                inset 0 0 0 1px rgba(255, 255, 255, 0.3);
+            user-select: none;
+        }
+
+        /* Resize Handles */
+        .resize-handle {
+            position: absolute;
+            background: #daa520;
+            border: 2px solid #ffffff;
+            border-radius: 50%;
+            width: 12px;
+            height: 12px;
+            z-index: 10;
+        }
+
+        .resize-handle.nw {
+            top: -6px;
+            left: -6px;
+            cursor: nw-resize;
+        }
+
+        .resize-handle.ne {
+            top: -6px;
+            right: -6px;
+            cursor: ne-resize;
+        }
+
+        .resize-handle.sw {
+            bottom: -6px;
+            left: -6px;
+            cursor: sw-resize;
+        }
+
+        .resize-handle.se {
+            bottom: -6px;
+            right: -6px;
+            cursor: se-resize;
+        }
+
+        .resize-handle.n {
+            top: -6px;
+            left: 50%;
+            transform: translateX(-50%);
+            cursor: n-resize;
+        }
+
+        .resize-handle.s {
+            bottom: -6px;
+            left: 50%;
+            transform: translateX(-50%);
+            cursor: s-resize;
+        }
+
+        .resize-handle.w {
+            top: 50%;
+            left: -6px;
+            transform: translateY(-50%);
+            cursor: w-resize;
+        }
+
+        .resize-handle.e {
+            top: 50%;
+            right: -6px;
+            transform: translateY(-50%);
+            cursor: e-resize;
+        }
+
+        /* Control Buttons */
+        .crop-controls {
+            text-align: center;
+            margin-top: 2rem;
+        }
+
+        .control-btn {
+            background: #2d4a2d;
+            color: #ffffff;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 1rem;
+            margin: 0 0.5rem;
+            transition: all 0.3s ease;
+        }
+
+        .control-btn:hover {
+            background: #1a4d1a;
+            transform: translateY(-2px);
+        }
+
+        .control-btn.secondary {
+            background: transparent;
+            color: #2d4a2d;
+            border: 2px solid #2d4a2d;
+        }
+
+        .control-btn.secondary:hover {
+            background: #2d4a2d;
+            color: #ffffff;
+        }
+
+        /* Results Section */
+        .results-section {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            margin: 20px 0;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .results-header {
+            text-align: center;
+            margin-bottom: 25px;
+        }
+
+        .results-header h2 {
+            color: #2d4a2d;
+            font-size: 1.8em;
+            margin-bottom: 10px;
+        }
+
+        /* Bottom Results Layout */
+        .bottom-results {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            align-items: start;
+        }
+
+        .result-column {
+            text-align: center;
+        }
+
+        .result-column h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 1.2em;
+        }
+
+        .cropped-image {
+            width: 100%;
+            max-width: 300px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+
+        .age-result {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            max-width: 300px;
+            aspect-ratio: 1;
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 0 auto;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+
+        .age-label {
+            color: #333;
+            font-size: 1.1em;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        .age-value {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #2d4a2d;
+        }
+
+        .close-btn {
+            background: #2d4a2d;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            margin-top: 30px;
+            transition: all 0.3s ease;
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .close-btn:hover {
+            background: #1a4d1a;
+        }
+
+        /* Credit color coding */
+        .credits-high a {
+            color: #28a745 !important;
+            font-weight: bold;
+        }
+
+        .credits-low a {
+            color: #ffc107 !important;
+            font-weight: bold;
+        }
+
+        .credits-none a {
+            color: #dc3545 !important;
+            font-weight: bold;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .drop-zone {
+                padding: 2rem 1rem;
+            }
+
+            .crop-interface {
+                padding: 1rem;
+            }
+
+            .model-buttons {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .control-btn {
+                margin: 0.25rem;
+                padding: 10px 20px;
+            }
+
+            .bottom-results {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+        }
+
+        /* Loading Animation */
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .spinner {
+            border: 3px solid rgba(45, 74, 45, 0.3);
+            border-top: 3px solid #2d4a2d;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loading-message {
+            font-size: 1.1rem;
+            color: #2d4a2d;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <p style="font-size: 60px;">Age<span style="color: #daa520;">My</span>Deer</p>
+            <p style="font-size: 30px;">Upload and crop your images for AI analysis</p>
+        </div>
+
+        <!-- Model Selection -->
+        <div class="model-selection">
+            <h2>Select Analysis Type</h2>
+            <div class="model-buttons">
+                <button class="model-btn" data-model="trailcam">
+                    Trail Camera
+                </button>
+                <button class="model-btn" data-model="jawbone">
+                    Jawbone
+                </button>
+            </div>
+        </div>
+
+        <!-- Drop Zone -->
+        <div class="drop-zone" id="dropZone">
+            <h3>Drag & Drop Your Image Here</h3>
+            <h4>(All images must be colored)</h4>
+            <h4></h4>
+            <button class="upload-btn" onclick="document.getElementById('fileInput').click()">
+                Choose Image File
+            </button>
+            <input type="file" id="fileInput" class="file-input" accept="image/*">
+        </div>
+
+        <!-- Crop Interface -->
+        <div class="crop-interface" id="cropInterface">
+            <h2>Crop Your Image</h2>
+            <div class="crop-info">
+                <p>Drag the crop area to reposition • Drag corners/edges to resize</p>
+            </div>
+
+            <div style="text-align: center;">
+                <div class="crop-container" id="cropContainer">
+                    <img id="cropImage" class="crop-image" src="" alt="Crop preview">
+                    <div class="crop-overlay" id="cropOverlay">
+                        <!-- Resize handles -->
+                        <div class="resize-handle nw" data-handle="nw"></div>
+                        <div class="resize-handle ne" data-handle="ne"></div>
+                        <div class="resize-handle sw" data-handle="sw"></div>
+                        <div class="resize-handle se" data-handle="se"></div>
+                        <div class="resize-handle n" data-handle="n"></div>
+                        <div class="resize-handle s" data-handle="s"></div>
+                        <div class="resize-handle w" data-handle="w"></div>
+                        <div class="resize-handle e" data-handle="e"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="crop-controls">
+                <button class="control-btn secondary" onclick="resetCrop()">Reset Crop</button>
+                <button class="control-btn" onclick="sendToAnalysis()">AI Analysis (1 Credit)</button>
+            </div>
+        </div>
+
+        <!-- Loading -->
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p class="loading-message" id="loadingMessage">Processing your image...</p>
+        </div>
+    </div>
+
+    <script>
+        let selectedModel = null;
+        let uploadedImage = null;
+        let cropData = {
+            x: 0,
+            y: 0,
+            width: 200,
+            height: 200
+        };
+        let isDragging = false;
+        let isResizing = false;
+        let dragStart = { x: 0, y: 0 };
+        let resizeHandle = null;
+        let aspectRatio = 1;
+        let loadingTimeout = null;
+
+        // Loading messages for trail camera
+        const trailCamMessages = [
+            "Chasing down deer...",
+            "Measuring body parameters...",
+            "Filling the corn feeder...",
+            "Calibrating measuring tape...",
+            "Checking trail cameras...",
+            "Counting antler points...",
+            "Analyzing deer tracks...",
+            "Consulting the hunting almanac...",
+            "Reading deer body language...",
+            "Estimating field dress weight...",
+            "Scanning for movement patterns...",
+            "Evaluating deer posture...",
+            "Measuring shoulder height...",
+            "Analyzing coat condition...",
+            "Checking environmental factors...",
+            "Studying deer behavior...",
+            "Calculating body mass index...",
+            "Examining facial features...",
+            "Assessing muscle development...",
+            "Reviewing seasonal factors..."
+        ];
+
+        // Loading messages for jawbone
+        const jawboneMessages = [
+            "Calibrating calipers...",
+            "Measuring incisors...",
+            "Counting molars...",
+            "Examining tooth wear...",
+            "Analyzing dental patterns...",
+            "Inspecting jaw structure...",
+            "Measuring tooth height...",
+            "Checking premolar wear...",
+            "Evaluating dental aging...",
+            "Reading tooth annuli...",
+            "Assessing enamel thickness...",
+            "Measuring jaw length...",
+            "Examining dental occlusion...",
+            "Analyzing tooth root depth...",
+            "Checking dental spacing...",
+            "Measuring crown height...",
+            "Evaluating wear patterns...",
+            "Inspecting tooth eruption...",
+            "Analyzing dental morphology...",
+            "Checking mandible structure..."
+        ];
+
+        function startLoadingMessages() {
+            const messages = selectedModel === 'trailcam' ? trailCamMessages : jawboneMessages;
+            let messageIndex = 0;
+            const messageElement = document.getElementById('loadingMessage');
+            
+            // Set initial message
+            messageElement.textContent = messages[messageIndex];
+            
+            function scheduleNextMessage() {
+                // Random interval between 2.5 and 4.5 seconds
+                const randomInterval = Math.random() * 2000 + 2500; // 2500-4500ms
+                
+                loadingTimeout = setTimeout(() => {
+                    messageIndex = (messageIndex + 1) % messages.length;
+                    messageElement.textContent = messages[messageIndex];
+                    scheduleNextMessage(); // Schedule the next message
+                }, randomInterval);
+            }
+            
+            scheduleNextMessage();
+        }
+
+        function stopLoadingMessages() {
+            if (loadingTimeout) {
+                clearTimeout(loadingTimeout);
+                loadingTimeout = null;
+            }
+        }
+
+        function clearResultsAndRefreshCredits() {
+            // Remove any existing results
+            const existingResults = document.querySelectorAll('.results-section');
+            existingResults.forEach(section => section.remove());
+            
+            // Refresh credit display and check limits
+            updateCreditUI();
+        }
+
+        // Model selection
+        document.querySelectorAll('.model-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.model-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                selectedModel = this.dataset.model;
+
+                // Clear results and refresh credits when model changes
+                clearResultsAndRefreshCredits();
+
+                // If there's already an image loaded, hide the crop interface since they're switching analysis types
+                if (uploadedImage) {
+                    document.getElementById('cropInterface').classList.remove('active');
+                    uploadedImage = null;
+                    fileInput.value = '';
+                }
+
+                if (selectedModel === 'trailcam') {
+                    aspectRatio = 1;
+                } else {
+                    aspectRatio = 2;
+                }
+            });
+        });
+
+        // File input handling
+        const fileInput = document.getElementById('fileInput');
+        const dropZone = document.getElementById('dropZone');
+
+        fileInput.addEventListener('change', handleFileSelect);
+        dropZone.addEventListener('click', (e) => {
+            // Prevent double-click if clicking the button
+            if (e.target.classList.contains('upload-btn')) return;
+            fileInput.click();
+        });
+
+        // Drag and drop handlers
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+
+        function handleFileSelect(e) {
+            const files = e.target.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        }
+
+        function handleFile(file) {
+            if (!selectedModel) {
+                alert('Please select an analysis type first!');
+                return;
+            }
+
+            if (!file.type.startsWith('image/')) {
+                alert('Please select an image file!');
+                return;
+            }
+
+            // Clear any existing results and refresh credits when new image is loaded
+            clearResultsAndRefreshCredits();
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                uploadedImage = e.target.result;
+                showCropInterface();
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function showCropInterface() {
+            document.getElementById('cropInterface').classList.add('active');
+            const cropImage = document.getElementById('cropImage');
+            cropImage.src = uploadedImage;
+
+            cropImage.onload = () => {
+                setupCropArea();
+                setupCropHandlers();
+            };
+        }
+
+        function setupCropArea() {
+            const cropImage = document.getElementById('cropImage');
+            const imgWidth = cropImage.offsetWidth;
+            const imgHeight = cropImage.offsetHeight;
+
+            let cropWidth, cropHeight;
+
+            if (selectedModel === 'trailcam') {
+                const size = Math.min(imgWidth, imgHeight) * 0.9;
+                cropWidth = size;
+                cropHeight = size;
+            } else {
+                const maxHeight = Math.min(imgHeight * 0.4, imgWidth * 0.2);
+                cropHeight = maxHeight;
+                cropWidth = maxHeight * 2;
+
+                if (cropWidth > imgWidth * 0.8) {
+                    cropWidth = imgWidth * 0.8;
+                    cropHeight = cropWidth * 0.5;
+                }
+            }
+
+            cropData = {
+                x: (imgWidth - cropWidth) / 2,
+                y: (imgHeight - cropHeight) / 2,
+                width: cropWidth,
+                height: cropHeight
+            };
+
+            updateCropOverlay();
+        }
+
+        function updateCropOverlay() {
+            const cropOverlay = document.getElementById('cropOverlay');
+            cropOverlay.style.left = cropData.x + 'px';
+            cropOverlay.style.top = cropData.y + 'px';
+            cropOverlay.style.width = cropData.width + 'px';
+            cropOverlay.style.height = cropData.height + 'px';
+        }
+
+        function setupCropHandlers() {
+            const cropOverlay = document.getElementById('cropOverlay');
+            const resizeHandles = document.querySelectorAll('.resize-handle');
+
+            cropOverlay.addEventListener('mousedown', startDrag);
+
+            resizeHandles.forEach(handle => {
+                handle.addEventListener('mousedown', (e) => startResize(e, handle.dataset.handle));
+            });
+
+            document.addEventListener('mousemove', handleMouseMove);
+            document.addEventListener('mouseup', handleMouseUp);
+        }
+
+        function startDrag(e) {
+            if (e.target.classList.contains('resize-handle')) return;
+
+            isDragging = true;
+            dragStart = {
+                x: e.clientX - cropData.x,
+                y: e.clientY - cropData.y
+            };
+            e.preventDefault();
+        }
+
+        function startResize(e, handle) {
+            isResizing = true;
+            resizeHandle = handle;
+            dragStart = {
+                x: e.clientX,
+                y: e.clientY,
+                cropX: cropData.x,
+                cropY: cropData.y,
+                cropWidth: cropData.width,
+                cropHeight: cropData.height
+            };
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        function handleMouseMove(e) {
+            if (isDragging) {
+                const cropImage = document.getElementById('cropImage');
+                const newX = e.clientX - dragStart.x;
+                const newY = e.clientY - dragStart.y;
+
+                cropData.x = Math.max(0, Math.min(cropImage.offsetWidth - cropData.width, newX));
+                cropData.y = Math.max(0, Math.min(cropImage.offsetHeight - cropData.height, newY));
+
+                updateCropOverlay();
+            } else if (isResizing) {
+                handleResize(e);
+            }
+        }
+
+        function handleResize(e) {
+            const cropImage = document.getElementById('cropImage');
+            const deltaX = e.clientX - dragStart.x;
+            const deltaY = e.clientY - dragStart.y;
+
+            let newX = dragStart.cropX;
+            let newY = dragStart.cropY;
+            let newWidth = dragStart.cropWidth;
+            let newHeight = dragStart.cropHeight;
+
+            switch (resizeHandle) {
+                case 'se':
+                    newWidth = dragStart.cropWidth + deltaX;
+                    newHeight = dragStart.cropHeight + deltaY;
+                    break;
+                case 'sw':
+                    newX = dragStart.cropX + deltaX;
+                    newWidth = dragStart.cropWidth - deltaX;
+                    newHeight = dragStart.cropHeight + deltaY;
+                    break;
+                case 'ne':
+                    newY = dragStart.cropY + deltaY;
+                    newWidth = dragStart.cropWidth + deltaX;
+                    newHeight = dragStart.cropHeight - deltaY;
+                    break;
+                case 'nw':
+                    newX = dragStart.cropX + deltaX;
+                    newY = dragStart.cropY + deltaY;
+                    newWidth = dragStart.cropWidth - deltaX;
+                    newHeight = dragStart.cropHeight - deltaY;
+                    break;
+                case 'n':
+                    newY = dragStart.cropY + deltaY;
+                    newHeight = dragStart.cropHeight - deltaY;
+                    break;
+                case 's':
+                    newHeight = dragStart.cropHeight + deltaY;
+                    break;
+                case 'w':
+                    newX = dragStart.cropX + deltaX;
+                    newWidth = dragStart.cropWidth - deltaX;
+                    break;
+                case 'e':
+                    newWidth = dragStart.cropWidth + deltaX;
+                    break;
+            }
+
+            const maxImageWidth = cropImage.offsetWidth;
+            const maxImageHeight = cropImage.offsetHeight;
+
+            if (selectedModel === 'trailcam') {
+                const maxSquareSize = Math.min(maxImageWidth, maxImageHeight);
+
+                if (['e', 'w'].includes(resizeHandle)) {
+                    newHeight = newWidth;
+                } else if (['n', 's'].includes(resizeHandle)) {
+                    newWidth = newHeight;
+                } else {
+                    const avgSize = (newWidth + newHeight) / 2;
+                    newWidth = avgSize;
+                    newHeight = avgSize;
+                }
+
+                if (newWidth > maxSquareSize) {
+                    newWidth = maxSquareSize;
+                    newHeight = maxSquareSize;
+                }
+                if (newHeight > maxSquareSize) {
+                    newWidth = maxSquareSize;
+                    newHeight = maxSquareSize;
+                }
+
+            } else if (selectedModel === 'jawbone') {
+                const maxJawboneHeight = Math.min(maxImageHeight, maxImageWidth * 0.5);
+
+                if (['n', 's', 'se', 'sw', 'ne', 'nw'].includes(resizeHandle)) {
+                    newWidth = newHeight * 2;
+                } else if (['e', 'w'].includes(resizeHandle)) {
+                    newHeight = newWidth * 0.5;
+                }
+
+                if (newHeight > maxJawboneHeight) {
+                    newHeight = maxJawboneHeight;
+                    newWidth = maxJawboneHeight * 2;
+                }
+                if (newWidth > maxImageWidth) {
+                    newWidth = maxImageWidth;
+                    newHeight = maxImageWidth * 0.5;
+                }
+            }
+
+            const minSize = 50;
+            if (selectedModel === 'trailcam') {
+                if (newWidth < minSize || newHeight < minSize) {
+                    newWidth = minSize;
+                    newHeight = minSize;
+                }
+            } else {
+                if (newHeight < minSize) {
+                    newHeight = minSize;
+                    newWidth = minSize * 2;
+                }
+                if (newWidth < minSize * 2) {
+                    newWidth = minSize * 2;
+                    newHeight = minSize;
+                }
+            }
+
+            const maxPossibleWidth = maxImageWidth - newX;
+            const maxPossibleHeight = maxImageHeight - newY;
+
+            if (newWidth > maxPossibleWidth) {
+                newWidth = maxPossibleWidth;
+                if (selectedModel === 'trailcam') {
+                    newHeight = newWidth;
+                } else {
+                    newHeight = newWidth * 0.5;
+                }
+            }
+
+            if (newHeight > maxPossibleHeight) {
+                newHeight = maxPossibleHeight;
+                if (selectedModel === 'trailcam') {
+                    newWidth = newHeight;
+                } else {
+                    newWidth = newHeight * 2;
+                }
+            }
+
+            newX = Math.max(0, Math.min(maxImageWidth - newWidth, newX));
+            newY = Math.max(0, Math.min(maxImageHeight - newHeight, newY));
+
+            cropData = { x: newX, y: newY, width: newWidth, height: newHeight };
+            updateCropOverlay();
+        }
+
+        function handleMouseUp() {
+            isDragging = false;
+            isResizing = false;
+            resizeHandle = null;
+        }
+
+        function resetCrop() {
+            setupCropArea();
+        }
+
+        async function sendToAnalysis() {
+            if (!uploadedImage || !selectedModel) {
+                alert('Please select a model and upload an image first!');
+                return;
+            }
+
+            if (!deerCredits.isLoggedIn) {
+                alert('Please log in to use analysis features.');
+                return;
+            }
+
+            const creditsNeeded = 1;
+
+            if (deerCredits.balance < creditsNeeded) {
+                alert(`Insufficient credits. You need ${creditsNeeded} credit but only have ${deerCredits.balance}.`);
+                return;
+            }
+
+            const analyzeBtn = document.querySelector('.control-btn[onclick="sendToAnalysis()"]');
+            analyzeBtn.disabled = true;
+            analyzeBtn.textContent = 'Processing...';
+
+            document.getElementById('loading').style.display = 'block';
+            startLoadingMessages();
+
+            try {
+                const croppedImageData = await getCroppedImageData();
+
+                const response = await fetch('https://deer-age-api-production.up.railway.app/analyze', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        image: croppedImageData,
+                        model_type: selectedModel,
+                        include_heatmap: false
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`AI Analysis failed: ${response.status}`);
+                }
+
+                const result = await response.json();
+
+                if (!result.success) {
+                    throw new Error(`Analysis failed: ${result.error || 'Unknown error'}`);
+                }
+
+                const creditResponse = await fetch('/wp-admin/admin-ajax.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({
+                        action: 'deduct_deer_credits',
+                        amount: creditsNeeded
+                    })
+                });
+
+                const creditResult = await creditResponse.json();
+                if (creditResult.success) {
+                    deerCredits.balance = creditResult.data.new_balance;
+                    updateCreditsDisplay(deerCredits.balance);
+                }
+
+                showAnalysisResults(result, croppedImageData);
+
+            } catch (error) {
+                console.error('Analysis error:', error);
+                alert('Analysis failed: ' + error.message + '\nNo credits were deducted.');
+
+                stopLoadingMessages();
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('cropInterface').style.display = 'block';
+            } finally {
+                analyzeBtn.disabled = false;
+                analyzeBtn.textContent = 'AI Analysis (1 Credit)';
+            }
+        }
+
+        function updateCreditsDisplay(balance) {
+            const menu = document.querySelector('#top-menu');
+            if (menu) {
+                const creditsItem = menu.firstElementChild;
+                if (creditsItem) {
+                    const creditsText = balance + ' credits';
+
+                    creditsItem.classList.remove('credits-high', 'credits-low', 'credits-none');
+
+                    if (balance > 1) {
+                        creditsItem.classList.add('credits-high');
+                    } else if (balance === 1) {
+                        creditsItem.classList.add('credits-low');
+                    } else {
+                        creditsItem.classList.add('credits-none');
+                    }
+
+                    creditsItem.innerHTML = '<a href="#">' + creditsText + '</a>';
+                    creditsItem.style.pointerEvents = 'none';
+                }
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            if (typeof deerCredits !== 'undefined') {
+                updateCreditsDisplay(deerCredits.balance);
+            }
+        });
+
+        async function getCroppedImageData() {
+            return new Promise((resolve, reject) => {
+                const cropImage = document.getElementById('cropImage');
+
+                const img = new Image();
+                img.onload = () => {
+                    // Use the same dimensions the crop overlay uses
+                    const displayWidth = cropImage.offsetWidth;
+                    const displayHeight = cropImage.offsetHeight;
+
+                    // Calculate exact scale factors
+                    const scaleX = img.naturalWidth / displayWidth;
+                    const scaleY = img.naturalHeight / displayHeight;
+
+                    // Scale crop coordinates exactly
+                    const sourceX = Math.round(cropData.x * scaleX);
+                    const sourceY = Math.round(cropData.y * scaleY);
+                    const sourceWidth = Math.round(cropData.width * scaleX);
+                    const sourceHeight = Math.round(cropData.height * scaleY);
+
+                    console.log('Display size:', displayWidth, 'x', displayHeight);
+                    console.log('Natural size:', img.naturalWidth, 'x', img.naturalHeight);
+                    console.log('Scale factors:', scaleX, scaleY);
+                    console.log('Crop data:', cropData);
+                    console.log('Source coords:', sourceX, sourceY, sourceWidth, sourceHeight);
+
+                    const targetSize = selectedModel === 'trailcam' ? 224 : 448;
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = targetSize;
+                    canvas.height = 224;
+
+                    ctx.drawImage(
+                        img,
+                        sourceX, sourceY, sourceWidth, sourceHeight,
+                        0, 0, targetSize, 224
+                    );
+
+                    resolve(canvas.toDataURL('image/jpeg', 0.95));
+                };
+
+                img.onerror = () => reject(new Error('Failed to load image'));
+                img.src = uploadedImage;
+            });
+        }
+
+        async function downloadCroppedImage() {
+            if (!uploadedImage) {
+                alert('Please upload an image first!');
+                return;
+            }
+
+            try {
+                const cropImage = document.getElementById('cropImage');
+                const displayWidth = cropImage.offsetWidth;
+                const displayHeight = cropImage.offsetHeight;
+
+                // Calculate natural image coordinates for filename
+                const img = new Image();
+                img.src = uploadedImage;
+                await new Promise(resolve => img.onload = resolve);
+
+                const scaleX = img.naturalWidth / displayWidth;
+                const scaleY = img.naturalHeight / displayHeight;
+
+                const x1 = Math.round(cropData.x * scaleX);
+                const y1 = Math.round(cropData.y * scaleY);
+                const x2 = Math.round((cropData.x + cropData.width) * scaleX);
+                const y2 = Math.round((cropData.y + cropData.height) * scaleY);
+
+                const filename = `${x1}_${y1}_${x2}_${y2}.jpg`;
+
+                const croppedImageData = await getCroppedImageData();
+
+                // Create download link
+                const link = document.createElement('a');
+                link.download = filename;
+                link.href = croppedImageData;
+                link.click();
+
+            } catch (error) {
+                console.error('Download error:', error);
+                alert('Failed to download cropped image: ' + error.message);
+            }
+        }
+
+        async function showAnalysisResults(result, croppedImageData) {
+            const modelName = selectedModel === 'trailcam' ? 'Trail Camera' : 'Jawbone';
+
+            stopLoadingMessages();
+
+            const existingResults = document.querySelectorAll('.results-section');
+            existingResults.forEach(section => section.remove());
+
+            const ageDisplay = result.age >= 5.5 ? `${result.age}+` : `${result.age}`;
+
+            const resultsHtml = `
+                <div class="results-section">
+                    <div class="results-header">
+                        <h2>${modelName} Analysis Results</h2>
+                    </div>
+
+                    <div class="bottom-results">
+                        <div class="result-column">
+                            <h3>Cropped Image</h3>
+                            <img src="${croppedImageData}" class="cropped-image" alt="Cropped image used for analysis">
+                        </div>
+                        <div class="result-column">
+                            <h3>Analysis Result</h3>
+                            <div class="age-result">
+                                <div class="age-label">Estimated Age</div>
+                                <div class="age-value">${ageDisplay} years</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button onclick="this.parentElement.remove(); updateCreditUI();" class="close-btn">
+                        Close Results
+                    </button>
+                </div>
+            `;
+
+            const cropInterface = document.getElementById('cropInterface');
+            cropInterface.insertAdjacentHTML('afterend', resultsHtml);
+
+            document.getElementById('loading').style.display = 'none';
+
+            setTimeout(() => {
+                const resultsDiv = cropInterface.nextElementSibling;
+                resultsDiv.scrollIntoView({ behavior: 'smooth' });
+            }, 100);
+        }
+
+        function updateCreditUI() {
+            const formData = new FormData();
+            formData.append('action', 'get_user_credits');
+
+            fetch('/wp-admin/admin-ajax.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                const credits = data.credits || 0;
+                const analyzeBtn = document.querySelector('.control-btn[onclick="sendToAnalysis()"]');
+
+                if (credits < 1) {
+                    analyzeBtn.disabled = true;
+                    analyzeBtn.textContent = 'Insufficient Credits';
+                    analyzeBtn.style.opacity = '0.5';
+                }
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', updateCreditUI);
+    </script>
+</body>
+</html>
