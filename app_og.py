@@ -3,7 +3,6 @@ from flask_cors import CORS
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torchvision.models as models
 import timm
 import numpy as np
 import cv2
@@ -30,15 +29,17 @@ class GradCAM:
         self.gradients = None
         self.activations = None
 
+        # Different target layer selection based on model type
         if model_type == "trailcam":
+            # ResNet-50 specific target layer for trailcam
             try:
-                for name, module in self.model.named_modules():
-                    if isinstance(module, nn.Conv2d):
-                        self.target_layer = module
-                print(f"TrailCam: Using automatic target layer selection")
+                self.target_layer = model.layer4[-1].conv3
+                print(f"TrailCam: Using ResNet-50 specific target layer: layer4[-1].conv3")
             except Exception as e:
-                print(f"TrailCam: Failed to select layer: {e}")
+                print(f"TrailCam: Failed to use ResNet-50 layer, falling back to automatic: {e}")
+                self._use_automatic_selection()
         else:
+            # Keep existing automatic selection for jawbone (working)
             self._use_automatic_selection()
 
         if self.target_layer is not None:
@@ -46,6 +47,7 @@ class GradCAM:
             self.target_layer.register_full_backward_hook(self.save_gradient)
 
     def _use_automatic_selection(self):
+        """Original automatic target layer selection"""
         for name, module in self.model.named_modules():
             if isinstance(module, nn.Conv2d):
                 self.target_layer = module
@@ -58,6 +60,7 @@ class GradCAM:
         self.gradients = grad_output[0]
 
     def generate_cam(self, input_tensor, class_idx):
+        # This method stays exactly the same as original
         if self.target_layer is None:
             return None
 
@@ -98,7 +101,8 @@ class DeerAnalyzer:
         self.model_name = model_name
         self.checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
 
-        if 'model_architecture' in self.checkpoint:
+        # Handle the ACTUAL checkpoint format - NO FALLBACKS
+        if 'model_architecture' in self.checkpoint:  # Actual trailcam format
             single_arch = self.checkpoint['model_architecture']
             num_models = self.checkpoint['num_models']
             self.architectures = [single_arch] * num_models
@@ -107,7 +111,8 @@ class DeerAnalyzer:
             self.label_mapping = self.checkpoint['label_mapping']
             self.state_dicts = self.checkpoint['model_state_dicts']
             self.cv_scores = self.checkpoint['cv_scores']
-        elif 'architectures_used' in self.checkpoint:
+            print(f"DEBUG: Using actual checkpoint format for {model_name}")
+        elif 'architectures_used' in self.checkpoint:  # Jawbone format
             self.architectures = self.checkpoint['architectures_used']
             self.num_classes = self.checkpoint['num_classes']
             self.input_size = self.checkpoint['input_size']
@@ -115,10 +120,15 @@ class DeerAnalyzer:
             self.state_dicts = self.checkpoint['model_state_dicts']
             self.cv_scores = self.checkpoint['cv_scores']
         else:
-            raise ValueError(f"Unknown checkpoint format for {model_name}")
+            raise ValueError(f"Unknown checkpoint format for {model_name}. Missing required keys: {list(self.checkpoint.keys())}")
 
+        print(f"DEBUG: {model_name} architectures: {self.architectures}")
+        print(f"DEBUG: {model_name} using input_size: {self.input_size}")
+
+        # Convert list to tuple to match working jawbone format
         if isinstance(self.input_size, list):
             self.input_size = tuple(self.input_size)
+            print(f"DEBUG: Converted {model_name} input_size to tuple: {self.input_size}")
 
         self.models = []
         self._load_models()
@@ -158,10 +168,12 @@ class DeerAnalyzer:
 
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
+        # DEBUG: Save raw received image
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         raw_filename = f"/tmp/{self.model_name}_raw_received_{timestamp}.png"
         Image.fromarray(img).save(raw_filename)
         print(f"DEBUG: Saved raw received image: {raw_filename}")
+        print(f"DEBUG: Raw image shape: {img.shape}")
 
         img_resized = cv2.resize(img, (self.input_size[1], self.input_size[0]))
         original_image = img_resized.copy()
@@ -181,6 +193,7 @@ class DeerAnalyzer:
             best_model_idx = np.argmax(self.cv_scores)
             best_model = self.models[best_model_idx]
 
+            # Pass model_type to GradCAM
             grad_cam = GradCAM(best_model, self.model_name)
             heatmap = grad_cam.generate_cam(input_tensor, predicted_class)
 
@@ -188,10 +201,28 @@ class DeerAnalyzer:
                 print(f"ERROR: GradCAM failed for {self.model_name}")
                 return None
 
+            # Save individual components to /tmp/
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+            # Original processed image
+            original_filename = f"/tmp/{self.model_name}_original_{timestamp}.png"
+            Image.fromarray(original_image.astype(np.uint8)).save(original_filename)
+
+            # Raw heatmap
+            heatmap_colored = cm.jet(heatmap)
+            heatmap_img = (heatmap_colored[:, :, :3] * 255).astype(np.uint8)
+            heatmap_filename = f"/tmp/{self.model_name}_heatmap_{timestamp}.png"
+            Image.fromarray(heatmap_img).save(heatmap_filename)
+
+            # Final overlay
             overlay = self.create_processed_heatmap_overlay(original_image, heatmap)
             overlay_filename = f"/tmp/{self.model_name}_overlay_{timestamp}.png"
             Image.fromarray(overlay).save(overlay_filename)
+
+            print(f"DEBUG: Saved {self.model_name} images:")
+            print(f"  Original: {original_filename}")
+            print(f"  Heatmap: {heatmap_filename}")
+            print(f"  Overlay: {overlay_filename}")
 
             overlay_pil = Image.fromarray(overlay)
             buffer = io.BytesIO()
@@ -281,206 +312,6 @@ class DeerAnalyzer:
             return {'success': False, 'error': str(e)}
 
 
-class SingleModelAnalyzer:
-    def __init__(self, checkpoint_path, model_name):
-        print(f"Loading {model_name} single model...")
-        self.model_name = model_name
-        self.checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
-
-        if 'model_state_dict' not in self.checkpoint:
-            raise ValueError(f"Invalid checkpoint format for {model_name}")
-
-        self.model_arch = self.checkpoint['model_name']
-        self.input_size = tuple(self.checkpoint['image_size'])
-
-        unique_ages = sorted([1.5, 2.5, 3.5, 4.5, 5.5])
-        self.label_mapping = {age: i for i, age in enumerate(unique_ages)}
-        self.num_classes = len(unique_ages)
-
-        print(f"Model: {self.model_arch}")
-        print(f"Input size: {self.input_size}")
-        print(f"Classes: {self.num_classes}")
-
-        self.model = self._load_model()
-        print(f"Loaded {model_name} successfully")
-
-    def _load_model(self):
-        if self.model_arch == 'efficientnet_b5':
-            model = models.efficientnet_b5(weights=None)
-        elif self.model_arch == 'efficientnet_b0':
-            model = models.efficientnet_b0(weights=None)
-        elif self.model_arch.startswith('resnet'):
-            model_fn = getattr(models, self.model_arch)
-            model = model_fn(weights=None)
-        else:
-            raise ValueError(f"Unknown architecture: {self.model_arch}")
-
-        if hasattr(model, 'classifier'):
-            if isinstance(model.classifier, nn.Sequential):
-                original_features = model.classifier[-1].in_features
-            else:
-                original_features = model.classifier.in_features
-
-            model.classifier = nn.Sequential(
-                nn.Dropout(0.3),
-                nn.Linear(original_features, 512),
-                nn.ReLU(inplace=True),
-                nn.Dropout(0.15),
-                nn.Linear(512, 256),
-                nn.ReLU(inplace=True),
-                nn.Dropout(0.075),
-                nn.Linear(256, self.num_classes)
-            )
-        elif hasattr(model, 'fc'):
-            original_features = model.fc.in_features
-            model.fc = nn.Sequential(
-                nn.Dropout(0.3),
-                nn.Linear(original_features, 512),
-                nn.ReLU(inplace=True),
-                nn.Dropout(0.15),
-                nn.Linear(512, 256),
-                nn.ReLU(inplace=True),
-                nn.Dropout(0.075),
-                nn.Linear(256, self.num_classes)
-            )
-
-        model.load_state_dict(self.checkpoint['model_state_dict'], strict=True)
-        model.eval()
-
-        return model
-
-    def preprocess_image(self, image_data):
-        if ',' in image_data:
-            image_data = image_data.split(',')[1]
-
-        image_bytes = base64.b64decode(image_data)
-        image_array = np.frombuffer(image_bytes, np.uint8)
-        img = cv2.imdecode(image_array, cv2.IMREAD_COLOR)
-
-        if img is None:
-            raise ValueError("Could not decode image")
-
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        raw_filename = f"/tmp/{self.model_name}_raw_{timestamp}.png"
-        Image.fromarray(img).save(raw_filename)
-        print(f"DEBUG: Saved raw image: {raw_filename}, shape: {img.shape}")
-
-        img_resized = cv2.resize(img, (self.input_size[1], self.input_size[0]))
-        original_image = img_resized.copy()
-
-        img_normalized = img_resized.astype(np.float32) / 255.0
-        img_tensor = torch.FloatTensor(img_normalized).permute(2, 0, 1)
-
-        mean = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
-        std = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
-        img_tensor = (img_tensor - mean) / std
-
-        return img_tensor.unsqueeze(0), original_image
-
-    def generate_heatmap(self, input_tensor, predicted_class, original_image):
-        try:
-            grad_cam = GradCAM(self.model, self.model_name)
-            heatmap = grad_cam.generate_cam(input_tensor, predicted_class)
-
-            if heatmap is None:
-                print(f"ERROR: GradCAM failed for {self.model_name}")
-                return None
-
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-            overlay = self.create_processed_heatmap_overlay(original_image, heatmap)
-            overlay_filename = f"/tmp/{self.model_name}_overlay_{timestamp}.png"
-            Image.fromarray(overlay).save(overlay_filename)
-            print(f"DEBUG: Saved overlay: {overlay_filename}")
-
-            overlay_pil = Image.fromarray(overlay)
-            buffer = io.BytesIO()
-            overlay_pil.save(buffer, format='PNG')
-            heatmap_base64 = base64.b64encode(buffer.getvalue()).decode()
-
-            return heatmap_base64
-
-        except Exception as e:
-            print(f"Heatmap error: {e}")
-            traceback.print_exc()
-            return None
-
-    def create_processed_heatmap_overlay(self, original_image, heatmap):
-        heatmap_thresh = np.copy(heatmap)
-        heatmap_thresh[heatmap_thresh < 0.001] = 0
-
-        if heatmap_thresh.max() > 0:
-            heatmap_thresh = heatmap_thresh / heatmap_thresh.max()
-
-        heatmap_colored = cm.jet(heatmap_thresh)
-        heatmap_colored_rgb = (heatmap_colored[:, :, :3] * 255).astype(np.uint8)
-
-        alpha_channel = heatmap_thresh.copy()
-        alpha_channel = (alpha_channel * 255).astype(np.uint8)
-
-        adjusted_original = self.apply_brightness_contrast(original_image, 0, -50)
-
-        overlay = adjusted_original.copy().astype(np.float32)
-        mask = alpha_channel > 0
-
-        if np.any(mask):
-            alpha_norm = alpha_channel[mask].astype(np.float32) / 255.0
-            base = overlay[mask] / 255.0
-            blend = heatmap_colored_rgb[mask].astype(np.float32) / 255.0
-
-            overlay_blend = np.zeros_like(base)
-            dark_mask = base <= 0.5
-            overlay_blend[dark_mask] = 2 * base[dark_mask] * blend[dark_mask]
-            overlay_blend[~dark_mask] = 1 - 2 * (1 - base[~dark_mask]) * (1 - blend[~dark_mask])
-
-            overlay[mask] = (base * (1 - alpha_norm[:, np.newaxis]) +
-                             overlay_blend * alpha_norm[:, np.newaxis]) * 255
-
-        return np.clip(overlay, 0, 255).astype(np.uint8)
-
-    def apply_brightness_contrast(self, image, brightness=0, contrast=0):
-        if contrast != 0:
-            f = 131 * (contrast + 127) / (127 * (131 - contrast))
-            alpha_c = f
-            gamma_c = 127 * (1 - f)
-            image = cv2.addWeighted(image, alpha_c, image, 0, gamma_c)
-
-        return np.clip(image, 0, 255).astype(np.uint8)
-
-    def analyze_image(self, image_data, include_heatmap=False):
-        try:
-            input_tensor, original_image = self.preprocess_image(image_data)
-
-            with torch.no_grad():
-                output = self.model(input_tensor)
-                probabilities = F.softmax(output, dim=1)[0]
-
-            predicted_class = torch.argmax(probabilities).item()
-            confidence = probabilities[predicted_class].item()
-
-            rating_mapping = {v: k for k, v in self.label_mapping.items()}
-            predicted_age = rating_mapping[predicted_class]
-
-            heatmap_base64 = None
-            if include_heatmap:
-                heatmap_base64 = self.generate_heatmap(input_tensor, predicted_class, original_image)
-
-            return {
-                'success': True,
-                'age': float(predicted_age),
-                'confidence': float(confidence),
-                'heatmap_base64': heatmap_base64,
-                'all_probabilities': probabilities.tolist()
-            }
-
-        except Exception as e:
-            print(f"Analysis error: {e}")
-            traceback.print_exc()
-            return {'success': False, 'error': str(e)}
-
-
 jawbone_analyzer = None
 trailcam_analyzer = None
 
@@ -490,10 +321,10 @@ def download_model(model_type):
         MODEL_URL = "https://www.dropbox.com/scl/fi/ziq8fbcx7l8jlk3ea5ofd/jawbone_ensemble.pth?rlkey=y7e51qh7xdvfj5k05x6ml4xzw&st=ndzw14qe&dl=1"
         local_path = "/app/jawbone_ensemble.pth"
     else:
-        MODEL_URL = "https://www.dropbox.com/scl/fi/9parnlqr3zgl7blr39vwc/251809_enb5.pth?rlkey=tdktdgobsloihf975fzprljs6&dl=1"
-        local_path = "/app/251809_enb5.pth"
+        MODEL_URL = "https://www.dropbox.com/scl/fi/mlxzmdxmbsva2xcjmk0aq/trailcam_ensemble.pth?rlkey=j20g65643vogy0etiyrlnbz97&dl=1"
+        local_path = "/app/trailcam_ensemble.pth"
 
-    if os.path.exists(local_path) and os.path.getsize(local_path) > 1000000:
+    if os.path.exists(local_path) and os.path.getsize(local_path) > 100000000:
         return local_path
 
     print(f"Downloading {model_type} model...")
@@ -552,7 +383,6 @@ def analyze_endpoint():
 
     except Exception as e:
         print(f"Endpoint error: {e}")
-        traceback.print_exc()
         return jsonify({'success': False, 'error': 'Internal server error'}), 500
 
 
@@ -581,7 +411,7 @@ def init_models():
 
         trailcam_path = download_model('trailcam')
         if trailcam_path:
-            trailcam_analyzer = SingleModelAnalyzer(trailcam_path, 'trailcam')
+            trailcam_analyzer = DeerAnalyzer(trailcam_path, 'trailcam')
             print("Trail camera model loaded!")
 
         print("Models ready!")
@@ -589,7 +419,6 @@ def init_models():
 
     except Exception as e:
         print(f"Failed to initialize models: {e}")
-        traceback.print_exc()
         return False
 
 
