@@ -7,4 +7,4 @@ In an effort to make all models fast, efficient, and streamlined, models are bui
 Updates:
 - 10/3/25: Latest model installed for trail camera imagery, utilizing both color and grayscale images.
 
--10/1/25: Exploration into other factors (location, image datetime) comoleted; not enough data to be useful
+-10/1/25: Exploration into other factors (location, image datetime) completed; not enough data to be useful, even when expanding data into multiple agencies.
