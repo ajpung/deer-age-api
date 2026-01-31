@@ -4,8 +4,8 @@ RUN apt-get update && apt-get install -y \
 
     libx11-6 \
     libxext6 \
-    libsmo \
-    libiceo \
+    #libsmo \
+    #libiceo \
     libgl1 \
 
     libxcb1 \
@@ -20,9 +20,7 @@ RUN apt-get update && apt-get install -y \
     libxcb-util1 \
     libxcb-xfixes0 \
     libxcb-xkb1 \
-    libxkbcommon-x11-0 \
-    libgl1-mesa-glx \
-    libgl1-mesa-glx && \
+    libxkbcommon-x11-0 && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
