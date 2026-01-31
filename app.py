@@ -488,10 +488,10 @@ trailcam_analyzer = None
 def download_model(model_type):
     if model_type == 'jawbone':
         MODEL_URL = "https://www.dropbox.com/scl/fi/ziq8fbcx7l8jlk3ea5ofd/jawbone_ensemble.pth?rlkey=y7e51qh7xdvfj5k05x6ml4xzw&st=ndzw14qe&dl=1"
-        local_path = "/tmp/jawbone_ensemble.pth"
+        local_path = "/app/jawbone_ensemble.pth"
     else:
         MODEL_URL = "https://www.dropbox.com/scl/fi/9parnlqr3zgl7blr39vwc/251809_enb5.pth?rlkey=tdktdgobsloihf975fzprljs6&dl=1"
-        local_path = "/tmp/251809_enb5.pth"
+        local_path = "/app/251809_enb5.pth"
 
     if os.path.exists(local_path) and os.path.getsize(local_path) > 1000000:
         return local_path
