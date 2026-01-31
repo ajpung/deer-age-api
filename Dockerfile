@@ -1,7 +1,7 @@
 FROM python:3.11-slim
 
 RUN apt-get update && apt-get install -y \
-    libxcb1 libx11-6 libxext6 libsm6 libice6 libgl1-mesa-glx \
+    libxcb1 libx11-6 libxext6 libsmo libiceo libgl1 libglx-mesa0 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
