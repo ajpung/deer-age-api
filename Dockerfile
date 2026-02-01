@@ -20,7 +20,7 @@ RUN apt-get update && apt-get install -y \
     libxcb-util1 \
     libxcb-xfixes0 \
     libxcb-xkb1 \
-    libxkbcommon-x11-0 && \
+    libxkbcommon-x11-0 \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
